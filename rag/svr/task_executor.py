@@ -130,7 +130,7 @@ def start_tracemalloc_and_snapshot(signum, frame):
     snapshot_file = f"snapshot_{timestamp}.trace"
     snapshot_file = os.path.abspath(os.path.join(get_project_base_directory(), "logs", f"{os.getpid()}_snapshot_{timestamp}.trace"))
 
-    snapshot = tracemalloc.take_snapshot()
+    snapshot = tracemalloc.take_snapshot() # 获取堆内存获取当前内存分配的快照（snapshot）。这个快照记录了内存分配的详细信息，包括每一处代码分配了多少内存。
     snapshot.dump(snapshot_file)
 
     current, peak = tracemalloc.get_traced_memory() # current 当前跟踪到的所有内存块的总大小，peak 内存跟踪以来内存块达到的最大总大小 
@@ -140,6 +140,7 @@ def start_tracemalloc_and_snapshot(signum, frame):
         max_rss = process.memory_info().rss / 1024 # 获取当前进程的常驻内存集(进程当前在物理内存中占用的字节数)
     else:
         import resource
+        # 获取当前 Python 进程的最大常驻内存使用量， 与 tracemalloc 互补（tracemalloc 更关注 Python 层；ru_maxrss 是系统层），包括 C拓展
         max_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss # resource.getrusage(resource.RUSAGE_SELF) 获取当前进程的资源使用情况 .ru_maxrss 获取当前进程的常驻内存集(物理内存)
     logging.info(f"taken snapshot {snapshot_file}. max RSS={max_rss / 1000:.2f} MB, current memory usage: {current / 10**6:.2f} MB, Peak memory usage: {peak / 10**6:.2f} MB")
 
