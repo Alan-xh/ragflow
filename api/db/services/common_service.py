@@ -22,15 +22,14 @@ from api.utils import current_timestamp, datetime_format, get_uuid
 
 
 class CommonService:
-    """Base service class that provides common database operations.
+    """提供通用数据库操作的基础服务类。
 
-    This class serves as a foundation for all service classes in the application,
-    implementing standard CRUD operations and common database query patterns.
-    It uses the Peewee ORM for database interactions and provides a consistent
-    interface for database operations across all derived service classes.
+    此类是应用程序中所有服务类的基础，
+    用于实现标准的 CRUD 操作和通用的数据库查询模式。
+    它使用 Peewee ORM 进行数据库交互，并为所有派生服务类的数据库操作提供一致的接口。
 
-    Attributes:
-        model: The Peewee model class that this service operates on. Must be set by subclasses.
+    属性：
+    model：此服务所操作的 Peewee 模型类。必须由子类设置。
     """
 
     model = None

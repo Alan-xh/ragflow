@@ -56,10 +56,12 @@ class TextFieldType(Enum):
 
 
 class LongTextField(TextField):
+    ''' 根据数据库类型选择 TEXT 类型映射 '''
     field_type = TextFieldType[settings.DATABASE_TYPE.upper()].value
 
 
 class JSONField(LongTextField):
+    ''' JSON 存储字段 '''
     default_value = {}
 
     def __init__(self, object_hook=None, object_pairs_hook=None, **kwargs):
@@ -111,6 +113,7 @@ class SerializedField(LongTextField):
 
 
 def is_continuous_field(cls: typing.Type) -> bool:
+    '''  判断字段是否是连续字段(非离散值) '''
     if cls in CONTINUOUS_FIELD_TYPE:
         return True
     for p in cls.__bases__:
@@ -124,14 +127,17 @@ def is_continuous_field(cls: typing.Type) -> bool:
 
 
 def auto_date_timestamp_field():
+    ''' 自动生成各类时间戳字段 '''
     return {f"{f}_time" for f in AUTO_DATE_TIMESTAMP_FIELD_PREFIX}
 
 
 def auto_date_timestamp_db_field():
+    ''' 自动生成各类时间戳字段 '''
     return {f"f_{f}_time" for f in AUTO_DATE_TIMESTAMP_FIELD_PREFIX}
 
 
 def remove_field_name_prefix(field_name):
+    ''' 移除字段名前缀 f_ '''
     return field_name[2:] if field_name.startswith("f_") else field_name
 
 

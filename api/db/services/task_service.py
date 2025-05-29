@@ -52,36 +52,34 @@ def trim_header_by_lines(text: str, max_length) -> str:
 
 
 class TaskService(CommonService):
-    """Service class for managing document processing tasks.
-    
-    This class extends CommonService to provide specialized functionality for document
-    processing task management, including task creation, progress tracking, and chunk
-    management. It handles various document types (PDF, Excel, etc.) and manages their
-    processing lifecycle.
-    
-    The class implements a robust task queue system with retry mechanisms and progress
-    tracking, supporting both synchronous and asynchronous task execution.
-    
-    Attributes:
-        model: The Task model class for database operations.
+    """
+    用于管理文档处理任务的服务类。
+
+    此类扩展了 CommonService，以提供用于文档处理任务管理的专用功能，包括任务创建、进度跟踪和块管理。它处理各种文档类型（PDF、Excel 等）并管理其处理生命周期。
+
+    该类实现了一个强大的任务队列系统，具有重试机制和进度跟踪功能，支持同步和异步任务执行。
+
+    属性：
+    model：用于数据库操作的 Task 模型类。
     """
     model = Task
 
     @classmethod
     @DB.connection_context()
     def get_task(cls, task_id):
-        """Retrieve detailed task information by task ID.
-    
-        This method fetches comprehensive task details including associated document,
-        knowledge base, and tenant information. It also handles task retry logic and
-        progress updates.
-    
-        Args:
-            task_id (str): The unique identifier of the task to retrieve.
-    
-        Returns:
-            dict: Task details dictionary containing all task information and related metadata.
-                 Returns None if task is not found or has exceeded retry limit.
+        """
+        通过任务 ID 检索详细的任务信息。
+
+        此方法获取全面的任务详细信息，包括相关文档、
+        知识库和租户信息。它还处理任务重试逻辑和
+        进度更新。
+
+        参数：
+        task_id (str)：要检索的任务的唯一标识符。
+
+        返回：
+        dict：包含所有任务信息和相关元数据的任务详细信息字典。
+        如果未找到任务或任务已超过重试限制，则返回 None。
         """
         fields = [
             cls.model.id,

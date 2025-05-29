@@ -105,7 +105,7 @@ task_limiter = trio.CapacityLimiter(MAX_CONCURRENT_TASKS)
 chunk_limiter = trio.CapacityLimiter(MAX_CONCURRENT_CHUNK_BUILDERS)
 minio_limiter = trio.CapacityLimiter(MAX_CONCURRENT_MINIO)
 WORKER_HEARTBEAT_TIMEOUT = int(os.environ.get('WORKER_HEARTBEAT_TIMEOUT', '120'))  # 心跳超时时间（秒）
-stop_event = threading.Event() # 控制程序优雅退出
+stop_event = threading.Event() # 退出事件
 
 
 def signal_handler(sig, frame):
@@ -188,6 +188,7 @@ def set_progress(task_id, from_page=0, to_page=-1, prog=None, msg="Processing...
         logging.exception(f"set_progress({task_id}), progress: {prog}, progress_msg: {msg}, got exception")
 
 async def collect():
+    ''' 获取待处理任务 '''
     global CONSUMER_NAME, DONE_TASKS, FAILED_TASKS
     global UNACKED_ITERATOR
     svr_queue_names = get_svr_queue_names()
@@ -614,6 +615,7 @@ async def do_handle_task(task):
 
 
 async def handle_task():
+    ''' 处理任务 '''
     global DONE_TASKS, FAILED_TASKS
     redis_msg, task = await collect()
     if not task:
