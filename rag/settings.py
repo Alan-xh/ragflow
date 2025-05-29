@@ -21,7 +21,7 @@ from api.utils.file_utils import get_project_base_directory
 # Server
 RAG_CONF_PATH = os.path.join(get_project_base_directory(), "conf")
 
-# Get storage type and document engine from system environment variables
+# 获取文件引擎和存储数据库类型
 STORAGE_IMPL_TYPE = os.getenv('STORAGE_IMPL', 'MINIO')
 DOC_ENGINE = os.getenv('DOC_ENGINE', 'elasticsearch')
 
@@ -33,7 +33,7 @@ MINIO = {}
 OSS = {}
 OS = {}
 
-# Initialize the selected configuration data based on environment variables to solve the problem of initialization errors due to lack of configuration
+# 根据环境变量初始化所选配置数据，解决缺少配置导致初始化错误的问题
 if DOC_ENGINE == 'elasticsearch':
     ES = get_base_config("es", {})
 elif DOC_ENGINE == 'opensearch':
@@ -55,14 +55,15 @@ try:
 except Exception:
     REDIS = {}
     pass
+# 上传文件最大长度
 DOC_MAXIMUM_SIZE = int(os.environ.get("MAX_CONTENT_LENGTH", 128 * 1024 * 1024))
 
-SVR_QUEUE_NAME = "rag_flow_svr_queue"
-SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"
-PAGERANK_FLD = "pagerank_fea"
-TAG_FLD = "tag_feas"
+SVR_QUEUE_NAME = "rag_flow_svr_queue" # 消息队列名称
+SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"  # 服务器端消费者组
+PAGERANK_FLD = "pagerank_fea" # PAGERANK字段
+TAG_FLD = "tag_feas" # 标签字段
 
-PARALLEL_DEVICES = None
+PARALLEL_DEVICES = None # 并行设备数
 try:
     import torch.cuda
     PARALLEL_DEVICES = torch.cuda.device_count()

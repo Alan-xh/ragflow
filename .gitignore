@@ -193,3 +193,8 @@ dist
 # SvelteKit build / generate output
 .svelte-kit
 
+# uv
+uv.lock
+
+# icu
+pyicu-2.15-cp312-cp312-win_amd64.whl
