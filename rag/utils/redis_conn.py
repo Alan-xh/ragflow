@@ -140,7 +140,7 @@ class RedisDB:
         return False
 
     def sadd(self, key: str, member: str):
-        ''' 将一个或多个成员添加到集合中 '''
+        ''' 将一个或多个成员(序列化后的JSON字符串)添加到集合中 '''
         try:
             self.REDIS.sadd(key, member)
             return True
@@ -217,7 +217,7 @@ class RedisDB:
         ''' 使用Redis事务以原子方式设置键值对，如果键不存在则设置 '''
         try:
             pipeline = self.REDIS.pipeline(transaction=True)
-            pipeline.set(key, value, exp, nx=True)
+            pipeline.set(key, value, exp, nx=True) # not exist 键不存在时才设置
             pipeline.execute()
             return True
         except Exception as e:
@@ -242,7 +242,7 @@ class RedisDB:
 
     def queue_consumer(self, queue_name, group_name, consumer_name, msg_id=b">") -> RedisMsg:
         """
-        从Redis Stream中消费消息，如果消费者组不存在则创建。
+        从 Redis Stream 中消费消息，如果消费者组不存在则创建。
         参考: https://redis.io/docs/latest/commands/xreadgroup/
         """
         try:
@@ -321,7 +321,6 @@ class RedisDB:
     def requeue_msg(self, queue: str, group_name: str, msg_id: str):
         '''
         重新排队一个消息：从队列中读取指定ID的消息内容，重新添加到队列中，并确认原消息。
-        这通常用于处理失败的消息，将其重新放入队列以便稍后再次处理。
         '''
         try:
             messages = self.REDIS.xrange(queue, msg_id, msg_id)

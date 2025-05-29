@@ -23,6 +23,7 @@ from api.utils.file_utils import get_project_base_directory
 
 
 def singleton(cls, *args, **kw):
+    ''' 单例检测 '''
     instances = {}
 
     def _singleton():

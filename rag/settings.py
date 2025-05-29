@@ -59,7 +59,7 @@ except Exception:
 DOC_MAXIMUM_SIZE = int(os.environ.get("MAX_CONTENT_LENGTH", 128 * 1024 * 1024))
 
 SVR_QUEUE_NAME = "rag_flow_svr_queue" # 消息队列名称
-SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"  # 服务器端消费者组
+SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"  # 消费组
 PAGERANK_FLD = "pagerank_fea" # PAGERANK字段
 TAG_FLD = "tag_feas" # 标签字段
 

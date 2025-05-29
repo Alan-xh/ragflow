@@ -17,15 +17,16 @@
 # from beartype import BeartypeConf
 # from beartype.claw import beartype_all  # <-- you didn't sign up for this
 # beartype_all(conf=BeartypeConf(violation_type=UserWarning))    # <-- emit warnings from all code
+import os
+import sys
+sys.path.insert(0, r"D:\Projects\ragflow")
 
 from api.utils.log_utils import initRootLogger
 from plugin import GlobalPluginManager
 initRootLogger("ragflow_server")
 
 import logging
-import os
 import signal
-import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor

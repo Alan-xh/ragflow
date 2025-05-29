@@ -87,24 +87,25 @@ FACTORY = {
 
 UNACKED_ITERATOR = None
 
-CONSUMER_NO = "0" if len(sys.argv) < 2 else sys.argv[1]
-CONSUMER_NAME = "task_executor_" + CONSUMER_NO
-BOOT_AT = datetime.now().astimezone().isoformat(timespec="milliseconds")
-PENDING_TASKS = 0
-LAG_TASKS = 0
-DONE_TASKS = 0
-FAILED_TASKS = 0
+CONSUMER_NO = "0" if len(sys.argv) < 2 else sys.argv[1] # 当前消费者的编号
+CONSUMER_NAME = "task_executor_" + CONSUMER_NO # 消费者唯一标识
+BOOT_AT = datetime.now().astimezone().isoformat(timespec="milliseconds") # 当前消费者启动时间
+PENDING_TASKS = 0 # 待处理任务数
+LAG_TASKS = 0 # 积压任务数
+DONE_TASKS = 0 # 已完成任务数
+FAILED_TASKS = 0 # 失败任务数
 
-CURRENT_TASKS = {}
+CURRENT_TASKS = {} # 正在运行的任务列表
 
-MAX_CONCURRENT_TASKS = int(os.environ.get('MAX_CONCURRENT_TASKS', "5"))
-MAX_CONCURRENT_CHUNK_BUILDERS = int(os.environ.get('MAX_CONCURRENT_CHUNK_BUILDERS', "1"))
-MAX_CONCURRENT_MINIO = int(os.environ.get('MAX_CONCURRENT_MINIO', '10'))
+MAX_CONCURRENT_TASKS = int(os.environ.get('MAX_CONCURRENT_TASKS', "5")) # 并发 TASKS 上限
+MAX_CONCURRENT_CHUNK_BUILDERS = int(os.environ.get('MAX_CONCURRENT_CHUNK_BUILDERS', "1")) # 并发 CHUNK_BUILDERS 上限
+MAX_CONCURRENT_MINIO = int(os.environ.get('MAX_CONCURRENT_MINIO', '10')) # 并发 MINIO 上限
+""" 控制并发任务 """
 task_limiter = trio.CapacityLimiter(MAX_CONCURRENT_TASKS)
 chunk_limiter = trio.CapacityLimiter(MAX_CONCURRENT_CHUNK_BUILDERS)
 minio_limiter = trio.CapacityLimiter(MAX_CONCURRENT_MINIO)
-WORKER_HEARTBEAT_TIMEOUT = int(os.environ.get('WORKER_HEARTBEAT_TIMEOUT', '120'))
-stop_event = threading.Event()
+WORKER_HEARTBEAT_TIMEOUT = int(os.environ.get('WORKER_HEARTBEAT_TIMEOUT', '120'))  # 心跳超时时间（秒）
+stop_event = threading.Event() # 控制程序优雅退出
 
 
 def signal_handler(sig, frame):
@@ -693,17 +694,17 @@ async def report_status():
 
 def recover_pending_tasks():
     redis_lock = RedisDistributedLock("recover_pending_tasks", lock_value=CONSUMER_NAME, timeout=60) # 获得分布式锁
-    svr_queue_names = get_svr_queue_names() # 获取所有服务队列名称
+    svr_queue_names = get_svr_queue_names() # 获取所有服务队列名称, 默认 rag_flow_svr_queue 、 rag_flow_svr_queue_1
     while not stop_event.is_set():
         try:
             if redis_lock.acquire():
                 for queue_name in svr_queue_names:
                     msgs = REDIS_CONN.get_pending_msg(queue=queue_name, group_name=SVR_CONSUMER_GROUP_NAME)
-                    msgs = [msg for msg in msgs if msg['consumer'] != CONSUMER_NAME]
+                    msgs = [msg for msg in msgs if msg['consumer'] != CONSUMER_NAME]  # 获取当前消费组中未处理的消息
                     if len(msgs) == 0:
                         continue
 
-                    task_executors = REDIS_CONN.smembers("TASKEXE")
+                    task_executors = REDIS_CONN.smembers("TASKEXE") # 获取所有任务执行器
                     task_executor_set = {t for t in task_executors}
                     msgs = [msg for msg in msgs if msg['consumer'] not in task_executor_set]
                     for msg in msgs:
@@ -711,7 +712,7 @@ def recover_pending_tasks():
                             f"Recover pending task: {msg['message_id']}, consumer: {msg['consumer']}, "
                             f"time since delivered: {msg['time_since_delivered'] / 1000} s"
                         )
-                        REDIS_CONN.requeue_msg(queue_name, SVR_CONSUMER_GROUP_NAME, msg['message_id'])
+                        REDIS_CONN.requeue_msg(queue_name, SVR_CONSUMER_GROUP_NAME, msg['message_id']) # 将消息重新入队
         except Exception:
             logging.warning("recover_pending_tasks got exception")
         finally:

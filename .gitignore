@@ -198,3 +198,6 @@ uv.lock
 
 # icu
 pyicu-2.15-cp312-cp312-win_amd64.whl
+
+# test
+test.py
