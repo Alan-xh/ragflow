@@ -50,6 +50,8 @@ class RedisMsg:
 @singleton
 class RedisDB:
     lua_delete_if_equal = None
+
+    ''' 获取 get键的值，如果存在且等于 ARGV[1] 则删除并返回 1'''
     LUA_DELETE_IF_EQUAL_SCRIPT = """
         local current_value = redis.call('get', KEYS[1])
         if current_value and current_value == ARGV[1] then
@@ -65,12 +67,14 @@ class RedisDB:
         self.__open__()
 
     def register_scripts(self) -> None:
+        ''' 注册Lua脚本，获取 EVALSHA 自动处理脚本缓存，返回可调用对象 '''
         cls = self.__class__
         client = self.REDIS
-        cls.lua_delete_if_equal = client.register_script(cls.LUA_DELETE_IF_EQUAL_SCRIPT)
+        cls.lua_delete_if_equal = client.register_script(cls.LUA_DELETE_IF_EQUAL_SCRIPT) # 获取 EVALSHA 自动处理脚本缓存，返回可调用对象
 
     def __open__(self):
         try:
+            ''' 创建 redis 连接对象，并注册脚本 '''
             self.REDIS = redis.StrictRedis(
                 host=self.config["host"].split(":")[0],
                 port=int(self.config.get("host", ":6379").split(":")[1]),
@@ -78,7 +82,7 @@ class RedisDB:
                 password=self.config.get("password"),
                 decode_responses=True,
             )
-            self.register_scripts()
+            self.register_scripts() # 注册所有必要的Lua脚本
         except Exception:
             logging.warning("Redis can't be connected.")
         return self.REDIS
@@ -86,15 +90,17 @@ class RedisDB:
     def health(self):
         self.REDIS.ping()
         a, b = "xx", "yy"
-        self.REDIS.set(a, b, 3)
+        self.REDIS.set(a, b, 3) # 设置 3 秒的过期时间的键值对
 
         if self.REDIS.get(a) == b:
             return True
 
     def is_alive(self):
+        ''' 检查Redis连接对象是否已成功创建 '''
         return self.REDIS is not None
 
     def exist(self, k):
+        ''' 检查Redis中是否存在指定的键 '''
         if not self.REDIS:
             return
         try:
@@ -104,6 +110,7 @@ class RedisDB:
             self.__open__()
 
     def get(self, k):
+        ''' 获取Redis中指定键的值 '''
         if not self.REDIS:
             return
         try:
@@ -113,6 +120,7 @@ class RedisDB:
             self.__open__()
 
     def set_obj(self, k, obj, exp=3600):
+        ''' 将Python对象序列化为JSON字符串后存储到Redis，并设置过期时间 '''
         try:
             self.REDIS.set(k, json.dumps(obj, ensure_ascii=False), exp)
             return True
@@ -122,6 +130,7 @@ class RedisDB:
         return False
 
     def set(self, k, v, exp=3600):
+        ''' 将键值对存储到Redis，并设置过期时间 '''
         try:
             self.REDIS.set(k, v, exp)
             return True
@@ -131,6 +140,7 @@ class RedisDB:
         return False
 
     def sadd(self, key: str, member: str):
+        ''' 将一个或多个成员添加到集合中 '''
         try:
             self.REDIS.sadd(key, member)
             return True
@@ -140,6 +150,7 @@ class RedisDB:
         return False
 
     def srem(self, key: str, member: str):
+        ''' 从集合中移除一个或多个成员 '''
         try:
             self.REDIS.srem(key, member)
             return True
@@ -149,6 +160,7 @@ class RedisDB:
         return False
 
     def smembers(self, key: str):
+        ''' 获取集合中的所有成员 '''
         try:
             res = self.REDIS.smembers(key)
             return res
@@ -160,6 +172,7 @@ class RedisDB:
         return None
 
     def zadd(self, key: str, member: str, score: float):
+        ''' 将一个或多个成员及其分数添加到有序集合中 '''
         try:
             self.REDIS.zadd(key, {member: score})
             return True
@@ -169,6 +182,7 @@ class RedisDB:
         return False
 
     def zcount(self, key: str, min: float, max: float):
+        ''' 计算有序集合中指定分数范围内的成员数量 '''
         try:
             res = self.REDIS.zcount(key, min, max)
             return res
@@ -178,6 +192,7 @@ class RedisDB:
         return 0
 
     def zpopmin(self, key: str, count: int):
+        ''' 从有序集合中移除并返回分数最低的N个成员 '''
         try:
             res = self.REDIS.zpopmin(key, count)
             return res
@@ -187,6 +202,7 @@ class RedisDB:
         return None
 
     def zrangebyscore(self, key: str, min: float, max: float):
+        ''' 获取有序集合中指定分数范围内的成员 '''
         try:
             res = self.REDIS.zrangebyscore(key, min, max)
             return res
@@ -198,6 +214,7 @@ class RedisDB:
         return None
 
     def transaction(self, key, value, exp=3600):
+        ''' 使用Redis事务以原子方式设置键值对，如果键不存在则设置 '''
         try:
             pipeline = self.REDIS.pipeline(transaction=True)
             pipeline.set(key, value, exp, nx=True)
@@ -211,6 +228,7 @@ class RedisDB:
         return False
 
     def queue_product(self, queue, message) -> bool:
+        ''' 将消息添加到Redis Stream队列中 '''
         for _ in range(3):
             try:
                 payload = {"message": json.dumps(message)}
@@ -223,7 +241,10 @@ class RedisDB:
         return False
 
     def queue_consumer(self, queue_name, group_name, consumer_name, msg_id=b">") -> RedisMsg:
-        """https://redis.io/docs/latest/commands/xreadgroup/"""
+        """
+        从Redis Stream中消费消息，如果消费者组不存在则创建。
+        参考: https://redis.io/docs/latest/commands/xreadgroup/
+        """
         try:
             group_info = self.REDIS.xinfo_groups(queue_name)
             if not any(gi["name"] == group_name for gi in group_info):
@@ -257,6 +278,9 @@ class RedisDB:
         return None
 
     def get_unacked_iterator(self, queue_names: list[str], group_name, consumer_name):
+        '''
+        获取未确认消息的迭代器，遍历指定队列中属于某个消费者组和消费者的未确认消息。
+        '''
         try:
             for queue_name in queue_names:
                 try:
@@ -283,6 +307,7 @@ class RedisDB:
             self.__open__()
 
     def get_pending_msg(self, queue, group_name):
+        ''' 获取指定队列和消费者组的待处理消息列表 '''
         try:
             messages = self.REDIS.xpending_range(queue, group_name, '-', '+', 10)
             return messages
@@ -294,6 +319,10 @@ class RedisDB:
         return []
 
     def requeue_msg(self, queue: str, group_name: str, msg_id: str):
+        '''
+        重新排队一个消息：从队列中读取指定ID的消息内容，重新添加到队列中，并确认原消息。
+        这通常用于处理失败的消息，将其重新放入队列以便稍后再次处理。
+        '''
         try:
             messages = self.REDIS.xrange(queue, msg_id, msg_id)
             if messages:
@@ -305,6 +334,7 @@ class RedisDB:
             )
 
     def queue_info(self, queue, group_name) -> dict | None:
+        ''' 获取指定队列和消费者组的信息 '''
         try:
             groups = self.REDIS.xinfo_groups(queue)
             for group in groups:
@@ -317,13 +347,17 @@ class RedisDB:
         return None
 
     def delete_if_equal(self, key: str, expected_value: str) -> bool:
-        """
+        '''
+        原子性操作：如果Redis中指定键的值等于给定值，则删除该键，否则不做任何操作。
+        此操作通过Lua脚本实现，保证原子性。
+
         Do follwing atomically:
         Delete a key if its value is equals to the given one, do nothing otherwise.
-        """
+        '''
         return bool(self.lua_delete_if_equal(keys=[key], args=[expected_value], client=self.REDIS))
 
     def delete(self, key) -> bool:
+        ''' 从Redis中删除指定的键 '''
         try:
             self.REDIS.delete(key)
             return True
@@ -338,6 +372,13 @@ REDIS_CONN = RedisDB()
 
 class RedisDistributedLock:
     def __init__(self, lock_key, lock_value=None, timeout=10, blocking_timeout=1):
+        """
+        初始化分布式锁。
+        :param lock_key: 锁的键名，用于在 Redis 中标识锁。
+        :param lock_value: 锁的值，默认为 None，如果未提供则生成一个 UUID。这个值用于“所有者”的概念，确保只有持有锁的进程才能释放它。
+        :param timeout: 锁的过期时间（秒），防止死锁。
+        :param blocking_timeout: 尝试获取锁时的阻塞超时时间（秒）。
+        """
         self.lock_key = lock_key
         if lock_value:
             self.lock_value = lock_value
@@ -347,10 +388,23 @@ class RedisDistributedLock:
         self.lock = Lock(REDIS_CONN.REDIS, lock_key, timeout=timeout, blocking_timeout=blocking_timeout)
 
     def acquire(self):
+        """
+        尝试获取分布式锁。
+        在尝试获取锁之前，会先尝试删除与当前 lock_key 和 lock_value 匹配的旧锁，
+        这有助于清理可能由于客户端崩溃而遗留的锁（通常在实际应用中会更谨慎处理）。
+        :return: 如果成功获取锁则返回 True，否则返回 False。
+        """
+        # 在尝试获取锁之前，先删除可能存在的旧锁，确保幂等性或清理。
         REDIS_CONN.delete_if_equal(self.lock_key, self.lock_value)
+        # 调用 Redis-Py Lock 对象的 acquire 方法来获取锁。
         return self.lock.acquire(token=self.lock_value)
 
     async def spin_acquire(self):
+        """
+        自旋尝试获取分布式锁，直到成功获取为止。
+        这是一个异步方法，当无法立即获取锁时，会等待一段时间后重试，
+        避免长时间阻塞。
+        """
         REDIS_CONN.delete_if_equal(self.lock_key, self.lock_value)
         while True:
             if self.lock.acquire(token=self.lock_value):
@@ -358,4 +412,12 @@ class RedisDistributedLock:
             await trio.sleep(10)
 
     def release(self):
+        """
+        释放分布式锁。
+        只有当存储在 Redis 中的锁的值与当前实例的 lock_value 匹配时，才会成功释放锁。
+        这确保了只有锁的持有者才能释放它。
+        """
+        # 调用 REDIS_CONN 的 delete_if_equal 方法来原子性地删除锁。
+        # 确保只有当 Redis 中的锁值与当前的 self.lock_value 相等时才删除，
+        # 避免误删其他进程持有的锁。
         REDIS_CONN.delete_if_equal(self.lock_key, self.lock_value)
