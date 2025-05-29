@@ -116,9 +116,12 @@ def signal_handler(sig, frame):
 
 # SIGUSR1 handler: start tracemalloc and take snapshot
 def start_tracemalloc_and_snapshot(signum, frame):
+    '''
+    开启 tracemalloc 并进行快照，存储文件位置在 ./logs/<pid>_snapshot_<timestamp>.trace，并且打印当前进程内存使用情况
+    '''
     if not tracemalloc.is_tracing():
         logging.info("start tracemalloc")
-        tracemalloc.start()
+        tracemalloc.start() # 启动内存跟踪
     else:
         logging.info("tracemalloc is already running")
 
@@ -128,14 +131,15 @@ def start_tracemalloc_and_snapshot(signum, frame):
 
     snapshot = tracemalloc.take_snapshot()
     snapshot.dump(snapshot_file)
-    current, peak = tracemalloc.get_traced_memory()
+
+    current, peak = tracemalloc.get_traced_memory() # current 当前跟踪到的所有内存块的总大小，peak 内存跟踪以来内存块达到的最大总大小 
     if sys.platform == "win32":
         import  psutil
-        process = psutil.Process()
-        max_rss = process.memory_info().rss / 1024
+        process = psutil.Process() # 获取当前进程对象的各种信息
+        max_rss = process.memory_info().rss / 1024 # 获取当前进程的常驻内存集(进程当前在物理内存中占用的字节数)
     else:
         import resource
-        max_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        max_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss # resource.getrusage(resource.RUSAGE_SELF) 获取当前进程的资源使用情况 .ru_maxrss 获取当前进程的常驻内存集(物理内存)
     logging.info(f"taken snapshot {snapshot_file}. max RSS={max_rss / 1000:.2f} MB, current memory usage: {current / 10**6:.2f} MB, Peak memory usage: {peak / 10**6:.2f} MB")
 
 # SIGUSR2 handler: stop tracemalloc
@@ -739,7 +743,7 @@ async def main():
     TRACE_MALLOC_ENABLED = int(os.environ.get('TRACE_MALLOC_ENABLED', "0"))
     if TRACE_MALLOC_ENABLED:
         start_tracemalloc_and_snapshot(None, None)
-    ''' 信号处理 '''
+    ''' 信号处理机制 '''
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     ''' 子线程恢复任务 '''
@@ -747,9 +751,9 @@ async def main():
 
     ''' open_nursery 多子任务，任何一个子任务异常，取消所有子任务 '''
     async with trio.open_nursery() as nursery:
-        nursery.start_soon(report_status)
+        nursery.start_soon(report_status) # 报告进程状态
         while not stop_event.is_set():
-            nursery.start_soon(task_manager)
+            nursery.start_soon(task_manager) # 处理任务
             await trio.sleep(0.1)
     logging.error("BUG!!! You should not reach here!!!")
 
