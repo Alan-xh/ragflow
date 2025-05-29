@@ -100,7 +100,7 @@ CURRENT_TASKS = {} # 正在运行的任务列表
 MAX_CONCURRENT_TASKS = int(os.environ.get('MAX_CONCURRENT_TASKS', "5")) # 并发 TASKS 上限
 MAX_CONCURRENT_CHUNK_BUILDERS = int(os.environ.get('MAX_CONCURRENT_CHUNK_BUILDERS', "1")) # 并发 CHUNK_BUILDERS 上限
 MAX_CONCURRENT_MINIO = int(os.environ.get('MAX_CONCURRENT_MINIO', '10')) # 并发 MINIO 上限
-""" 控制并发任务 """
+""" 控制并发任务，并发限制器 """
 task_limiter = trio.CapacityLimiter(MAX_CONCURRENT_TASKS)
 chunk_limiter = trio.CapacityLimiter(MAX_CONCURRENT_CHUNK_BUILDERS)
 minio_limiter = trio.CapacityLimiter(MAX_CONCURRENT_MINIO)
@@ -192,13 +192,14 @@ async def collect():
     ''' 获取待处理任务 '''
     global CONSUMER_NAME, DONE_TASKS, FAILED_TASKS
     global UNACKED_ITERATOR
-    svr_queue_names = get_svr_queue_names()
+    svr_queue_names = get_svr_queue_names() # 获取所有队列名称
     try:
         if not UNACKED_ITERATOR:
-            UNACKED_ITERATOR = REDIS_CONN.get_unacked_iterator(svr_queue_names, SVR_CONSUMER_GROUP_NAME, CONSUMER_NAME)
+            UNACKED_ITERATOR = REDIS_CONN.get_unacked_iterator(svr_queue_names, SVR_CONSUMER_GROUP_NAME, CONSUMER_NAME) # 获取未确认消息的迭代器
         try:
             redis_msg = next(UNACKED_ITERATOR)
         except StopIteration:
+            ''' 获取未确认消息的迭代器为空，从队列中获取消息  '''
             for svr_queue_name in svr_queue_names:
                 redis_msg = REDIS_CONN.queue_consumer(svr_queue_name, SVR_CONSUMER_GROUP_NAME, CONSUMER_NAME)
                 if redis_msg:
@@ -209,7 +210,7 @@ async def collect():
 
     if not redis_msg:
         return None, None
-    msg = redis_msg.get_message()
+    msg = redis_msg.get_message() # 获取消息
     if not msg:
         logging.error(f"collect got empty message of {redis_msg.get_msg_id()}")
         redis_msg.ack()
@@ -618,7 +619,7 @@ async def do_handle_task(task):
 async def handle_task():
     ''' 处理任务 '''
     global DONE_TASKS, FAILED_TASKS
-    redis_msg, task = await collect()
+    redis_msg, task = await collect() # 获取 redis信息流和任务信息
     if not task:
         await trio.sleep(5)
         return
