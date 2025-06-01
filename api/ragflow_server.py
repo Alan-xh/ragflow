@@ -52,6 +52,21 @@ stop_event = threading.Event()
 RAGFLOW_DEBUGPY_LISTEN = int(os.environ.get('RAGFLOW_DEBUGPY_LISTEN', "0"))
 
 def update_progress():
+    """
+    周期性地使用 Redis 分布式锁更新文档进度。
+
+    此函数在一个循环中运行，在调用 `DocumentService.update_progress()` 之前
+    周期性地尝试获取一个 Redis 分布式锁。使用分布式锁确保在任何给定时间只有
+    一个进程或线程可以更新进度，从而防止潜在的竞态条件或对同一资源的并发更新。
+
+    函数将持续运行直到全局的 `stop_event` 被设置。
+    在成功更新进度并释放锁后，它会等待 6 秒钟再尝试下一次获取锁。如果在获取
+    锁时失败或在更新过程中发生异常，它也会在下一次循环迭代前等待（因为
+    调用了 `stop_event.wait(6)`）。
+
+    获取锁、更新进度或释放锁过程中捕获到的任何错误都会被记录。
+    每次迭代生成的唯一锁值也会被记录，以便于调试。
+    """
     lock_value = str(uuid.uuid4())
     redis_lock = RedisDistributedLock("update_progress", lock_value=lock_value, timeout=60)
     logging.info(f"update_progress lock_value: {lock_value}")
@@ -98,6 +113,7 @@ if __name__ == '__main__':
 
     # init db
     init_web_db()
+    # init_llm_factory and add_graph_templates
     init_web_data()
     # init runtime config
     import argparse
