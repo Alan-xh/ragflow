@@ -87,7 +87,7 @@ FACTORY = {
 
 UNACKED_ITERATOR = None
 
-CONSUMER_NO = "0" if len(sys.argv) < 2 else sys.argv[1] # 当前消费者的编号
+CONSUMER_NO = "0" if len(sys.argv) < 2 else sys.argv[1] # 当前消费者的编号, 对应 task_id
 CONSUMER_NAME = "task_executor_" + CONSUMER_NO # 消费者唯一标识
 BOOT_AT = datetime.now().astimezone().isoformat(timespec="milliseconds") # 当前消费者启动时间
 PENDING_TASKS = 0 # 待处理任务数
@@ -158,7 +158,18 @@ class TaskCanceledException(Exception):
 
 
 def set_progress(task_id, from_page=0, to_page=-1, prog=None, msg="Processing..."):
+    '''
+    数据库记录任务进度
+    
+    args:
+        task_id: 任务ID
+        from_page: 当前页码
+        to_page: 总页码
+        prog: 进程数
+        msg: 进度信息
+    '''
     try:
+        # 进度小于0表示任务取消
         if prog is not None and prog < 0:
             msg = "[ERROR]" + msg
         cancel = TaskService.do_cancel(task_id)
@@ -167,6 +178,7 @@ def set_progress(task_id, from_page=0, to_page=-1, prog=None, msg="Processing...
             msg += " [Canceled]"
             prog = -1
 
+        # 记录处理进度
         if to_page > 0:
             if msg:
                 if from_page < to_page:
@@ -190,8 +202,8 @@ def set_progress(task_id, from_page=0, to_page=-1, prog=None, msg="Processing...
 
 async def collect():
     ''' 获取待处理任务 '''
-    global CONSUMER_NAME, DONE_TASKS, FAILED_TASKS
-    global UNACKED_ITERATOR
+    global CONSUMER_NAME, DONE_TASKS, FAILED_TASKS # 消费者 id ， 完成数量， 失败数量
+    global UNACKED_ITERATOR # 
     svr_queue_names = get_svr_queue_names() # 获取所有队列名称
     try:
         if not UNACKED_ITERATOR:
