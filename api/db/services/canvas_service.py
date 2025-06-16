@@ -173,6 +173,19 @@ def completion(tenant_id, agent_id, question, session_id=None, stream=True, **kw
             conv.reference = []
         conv.reference.append({"chunks": [], "doc_aggs": []})
 
+        kwargs_changed = False
+        if kwargs:
+            query = canvas.get_preset_param()
+            if query:
+                for ele in query:
+                    if ele["key"] in kwargs:
+                        if ele["value"] != kwargs[ele["key"]]:
+                            ele["value"] = kwargs[ele["key"]]
+                            kwargs_changed = True
+        if kwargs_changed:
+            conv.dsl = json.loads(str(canvas))
+            API4ConversationService.update_by_id(session_id, {"dsl": conv.dsl})
+
     final_ans = {"reference": [], "content": ""}
     if stream:
         try:
@@ -281,8 +294,22 @@ def completionOpenAI(tenant_id, agent_id, question, session_id=None, stream=True
             "source": "agent",
             "dsl": cvs.dsl
         }
+        canvas.messages.append({"role": "user", "content": question, "id": message_id})
+        canvas.add_user_input(question)
+
         API4ConversationService.save(**conv)
         conv = API4Conversation(**conv)
+        if not conv.message:
+            conv.message = []
+        conv.message.append({
+            "role": "user",
+            "content": question,
+            "id": message_id
+        })
+        
+        if not conv.reference:
+            conv.reference = []
+        conv.reference.append({"chunks": [], "doc_aggs": []})
             
     # Handle existing session
     else:
@@ -318,7 +345,7 @@ def completionOpenAI(tenant_id, agent_id, question, session_id=None, stream=True
     if stream:
         try:
             completion_tokens = 0
-            for ans in canvas.run(stream=True):
+            for ans in canvas.run(stream=True, bypass_begin=True):
                 if ans.get("running_status"):
                     completion_tokens += len(tiktokenenc.encode(ans.get("content", "")))
                     yield "data: " + json.dumps(
@@ -381,7 +408,7 @@ def completionOpenAI(tenant_id, agent_id, question, session_id=None, stream=True
     else:  # Non-streaming mode
         try:
             all_answer_content = ""
-            for answer in canvas.run(stream=False):
+            for answer in canvas.run(stream=False, bypass_begin=True):
                 if answer.get("running_status"):
                     continue
                 

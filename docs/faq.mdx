@@ -19,7 +19,7 @@ import TOCInline from '@theme/TOCInline';
 
 ### What sets RAGFlow apart from other RAG products?
 
-The "garbage in garbage out" status quo remains unchanged despite the fact that LLMs have advanced Natural Language Processing (NLP) significantly. In response, RAGFlow introduces two unique features compared to other Retrieval-Augmented Generation (RAG) products.
+The "garbage in garbage out" status quo remains unchanged despite the fact that LLMs have advanced Natural Language Processing (NLP) significantly. In its response, RAGFlow introduces two unique features compared to other Retrieval-Augmented Generation (RAG) products.
 
 - Fine-grained document parsing: Document parsing involves images and tables, with the flexibility for you to intervene as needed.
 - Traceable answers with reduced hallucinations: You can trust RAGFlow's responses as you can view the citations and references supporting them.
@@ -127,7 +127,19 @@ The corresponding APIs are now available. See the [RAGFlow HTTP API Reference](.
 
 ### Do you support stream output?
 
-Yes, we do.
+Yes, we do. Stream output is enabled by default in the chat assistant and agent. Note that you cannot disable stream output via RAGFlow's UI. To disable stream output in responses, use RAGFlow's Python or RESTful APIs:
+
+Python:
+
+- [Create chat completion](./references/python_api_reference.md#create-chat-completion)
+- [Converse with chat assistant](./references/python_api_reference.md#converse-with-chat-assistant)
+- [Converse with agent](./references/python_api_reference.md#converse-with-agent)
+
+RESTful:
+
+- [Create chat completion](./references/http_api_reference.md#create-chat-completion)
+- [Converse with chat assistant](./references/http_api_reference.md#converse-with-chat-assistant)
+- [Converse with agent](./references/http_api_reference.md#converse-with-agent)
 
 ---
 

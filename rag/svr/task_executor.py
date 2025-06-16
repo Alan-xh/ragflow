@@ -724,9 +724,10 @@ def recover_pending_tasks():
             stop_event.wait(60)
 
 async def task_manager():
-    global task_limiter
-    async with task_limiter:
+    try:
         await handle_task()
+    finally:
+        task_limiter.release()
 
 
 async def main():
@@ -758,8 +759,8 @@ async def main():
     async with trio.open_nursery() as nursery:
         nursery.start_soon(report_status) # 报告进程状态
         while not stop_event.is_set():
+            await task_limiter.acquire()
             nursery.start_soon(task_manager) # 处理任务
-            await trio.sleep(0.1)
     logging.error("BUG!!! You should not reach here!!!")
 
 if __name__ == "__main__":

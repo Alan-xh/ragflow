@@ -8,7 +8,7 @@ import {
   FormItem,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { BlurInput } from '@/components/ui/input';
 import { RAGFlowSelect } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { RAGFlowNodeType } from '@/interfaces/database/flow';
@@ -16,7 +16,7 @@ import { X } from 'lucide-react';
 import { ReactNode } from 'react';
 import { useFieldArray, useFormContext } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { useBuildComponentIdSelectOptions } from '../../hooks/use-get-begin-query';
+import { useBuildVariableOptions } from '../../hooks/use-get-begin-query';
 
 interface IProps {
   node?: RAGFlowNodeType;
@@ -41,10 +41,7 @@ export function DynamicVariableForm({ node, name = 'arguments' }: IProps) {
     control: form.control,
   });
 
-  const valueOptions = useBuildComponentIdSelectOptions(
-    node?.id,
-    node?.parentId,
-  );
+  const valueOptions = useBuildVariableOptions(node?.id, node?.parentId);
 
   return (
     <div className="space-y-5">
@@ -58,10 +55,10 @@ export function DynamicVariableForm({ node, name = 'arguments' }: IProps) {
               render={({ field }) => (
                 <FormItem className="w-2/5">
                   <FormControl>
-                    <Input
+                    <BlurInput
                       {...field}
                       placeholder={t('common.pleaseInput')}
-                    ></Input>
+                    ></BlurInput>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

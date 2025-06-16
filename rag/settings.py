@@ -63,7 +63,7 @@ SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"  # 消费组
 PAGERANK_FLD = "pagerank_fea" # PAGERANK字段
 TAG_FLD = "tag_feas" # 标签字段
 
-PARALLEL_DEVICES = None # 并行设备数
+PARALLEL_DEVICES = 0 # 并行设备数
 try:
     import torch.cuda
     PARALLEL_DEVICES = torch.cuda.device_count()
