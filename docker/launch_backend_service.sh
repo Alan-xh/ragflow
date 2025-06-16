@@ -13,9 +13,9 @@ load_env_file() {
     if [ -f "$env_file" ]; then
         echo "Loading environment variables from: $env_file"
         # Source the .env file
-        set -a
+        set -a  # 之后定义的变量为环境变量
         source "$env_file" 
-        set +a
+        set +a # 关闭之后定义的变量为环境变量，以防篡改 .env 中定义的环境变量
     else
         echo "Warning: .env file not found at: $env_file"
     fi
