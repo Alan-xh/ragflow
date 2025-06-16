@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status
+# 遇到命令非零状态退出立即停止执行
 set -e
 
-# Function to load environment variables from .env file
+# 加载当前 shell 文件路径的环境变量
 load_env_file() {
     # Get the directory of the current script
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,6 +28,7 @@ load_env_file
 export http_proxy=""; export https_proxy=""; export no_proxy=""; export HTTP_PROXY=""; export HTTPS_PROXY=""; export NO_PROXY=""
 export PYTHONPATH=$(pwd)
 
+# 切换 jemalloc 作为默认内存分配器
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/
 JEMALLOC_PATH=$(pkg-config --variable=libdir jemalloc)/libjemalloc.so
 
@@ -50,7 +51,7 @@ PIDS=()
 # Set the path to the NLTK data directory
 export NLTK_DATA="./nltk_data"
 
-# Function to handle termination signals
+# 清平并且退出所有进程
 cleanup() {
   echo "Termination signal received. Shutting down..."
   STOP=true
@@ -67,14 +68,14 @@ cleanup() {
 # Trap SIGINT and SIGTERM to invoke cleanup
 trap cleanup SIGINT SIGTERM
 
-# Function to execute task_executor with retry logic
+# Function to execute task_executor with retry logic 重试任务执行器
 task_exe(){
     local task_id=$1
     local retry_count=0
     while ! $STOP && [ $retry_count -lt $MAX_RETRIES ]; do
         echo "Starting task_executor.py for task $task_id (Attempt $((retry_count+1)))"
         LD_PRELOAD=$JEMALLOC_PATH $PY rag/svr/task_executor.py "$task_id"
-        EXIT_CODE=$?
+        EXIT_CODE=$?    #  $? 特殊变量 获取上一个执行的命令或进程的退出状态
         if [ $EXIT_CODE -eq 0 ]; then
             echo "task_executor.py for task $task_id exited successfully."
             break
@@ -114,14 +115,14 @@ run_server(){
     fi
 }
 
-# Start task executors
+# Start task executors  创建 WS 个任务执行器 i 表示 task id
 for ((i=0;i<WS;i++))
 do
   task_exe "$i" &
   PIDS+=($!)
 done
 
-# Start the main server
+# Start the main server 开启一个主服务
 run_server &
 PIDS+=($!)
 
