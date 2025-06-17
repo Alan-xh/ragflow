@@ -99,21 +99,25 @@ class BaseType:
     def to_dict_with_type(self):
         def _dict(obj):
             module = None
+            # 子类去除属性名的 _ 前缀，并返回字典
             if issubclass(obj.__class__, BaseType):
                 data = {}
                 for attr, v in obj.__dict__.items():
                     k = attr.lstrip("_")
                     data[k] = _dict(v)
                 module = obj.__module__
+            # 子类列表返回列表
             elif isinstance(obj, (list, tuple)):
                 data = []
                 for i, vv in enumerate(obj):
                     data.append(_dict(vv))
+            # 子类字典返回字典
             elif isinstance(obj, dict):
                 data = {}
                 for _k, vv in obj.items():
                     data[_k] = _dict(vv)
             else:
+            # 其他返回原值
                 data = obj
             return {"type": obj.__class__.__name__,
                     "data": data, "module": module}

@@ -15,4 +15,4 @@
 #
 
 from beartype.claw import beartype_this_package
-beartype_this_package()
+beartype_this_package()  # 对库里所有的方法和属性进行类型检查

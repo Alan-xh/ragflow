@@ -29,8 +29,10 @@ from api.utils.file_utils import get_project_base_directory
 from graphrag import search as kg_search
 from rag.nlp import search
 
+# 轻量模式
 LIGHTEN = int(os.environ.get("LIGHTEN", "0"))
 
+# 服务基本配置
 LLM = None
 LLM_FACTORY = None
 LLM_BASE_URL = None
@@ -46,6 +48,7 @@ HOST_PORT = None
 SECRET_KEY = None
 FACTORY_LLM_INFOS = None
 
+# 数据库配置
 DATABASE_TYPE = os.getenv("DB_TYPE", "mysql")
 DATABASE = decrypt_database_config(name=DATABASE_TYPE)
 
@@ -65,7 +68,7 @@ retrievaler = None
 kg_retrievaler = None
 
 # user registration switch
-REGISTER_ENABLED = 1
+REGISTER_ENABLED = 1 # 用户注册开关
 
 
 # sandbox-executor-manager
@@ -75,16 +78,17 @@ SANDBOX_HOST = None
 BUILTIN_EMBEDDING_MODELS = ["BAAI/bge-large-zh-v1.5@BAAI", "maidalun1020/bce-embedding-base_v1@Youdao"]
 
 def get_or_create_secret_key():
+    # 从环境变量中获取 RAGFLOW_SECRET_KEY
     secret_key = os.environ.get("RAGFLOW_SECRET_KEY")
     if secret_key and len(secret_key) >= 32:
         return secret_key
     
-    # Check if there's a configured secret key
+    # 从环境变量的 ragflow 的 secret_key 获取 RAGFLOW_SECRET_KEY
     configured_key = get_base_config(RAG_FLOW_SERVICE_NAME, {}).get("secret_key")
     if configured_key and configured_key != str(date.today()) and len(configured_key) >= 32:
         return configured_key
     
-    # Generate a new secure key and warn about it
+    # 随机生成一个密钥 Generate a new secure key and warn about it
     import logging
     new_key = secrets.token_hex(32)
     logging.warning(
@@ -96,24 +100,25 @@ def get_or_create_secret_key():
 
 def init_settings():
     global LLM, LLM_FACTORY, LLM_BASE_URL, LIGHTEN, DATABASE_TYPE, DATABASE, FACTORY_LLM_INFOS, REGISTER_ENABLED
-    LIGHTEN = int(os.environ.get("LIGHTEN", "0"))
-    DATABASE_TYPE = os.getenv("DB_TYPE", "mysql")
-    DATABASE = decrypt_database_config(name=DATABASE_TYPE)
-    LLM = get_base_config("user_default_llm", {})
-    LLM_DEFAULT_MODELS = LLM.get("default_models", {})
+    LIGHTEN = int(os.environ.get("LIGHTEN", "0")) # 轻量
+    DATABASE_TYPE = os.getenv("DB_TYPE", "mysql") # 数据库类型
+    DATABASE = decrypt_database_config(name=DATABASE_TYPE) # 数据库配置
+    LLM = get_base_config("user_default_llm", {}) # 默认 LLM 配置
+    LLM_DEFAULT_MODELS = LLM.get("default_models", {}) # 默认模型
     LLM_FACTORY = LLM.get("factory")
-    LLM_BASE_URL = LLM.get("base_url")
     try:
-        REGISTER_ENABLED = int(os.environ.get("REGISTER_ENABLED", "1"))
+        REGISTER_ENABLED = int(os.environ.get("REGISTER_ENABLED", "1")) # 用户可否注册
     except Exception:
         pass
 
     try:
+        ''' 导入部分 LLM 的基础信息 '''
         with open(os.path.join(get_project_base_directory(), "conf", "llm_factories.json"), "r") as f:
             FACTORY_LLM_INFOS = json.load(f)["factory_llm_infos"]
     except Exception:
         FACTORY_LLM_INFOS = []
 
+    # 所有模型
     global CHAT_MDL, EMBEDDING_MDL, RERANK_MDL, ASR_MDL, IMAGE2TEXT_MDL
     if not LIGHTEN:
         EMBEDDING_MDL = BUILTIN_EMBEDDING_MODELS[0]
@@ -132,6 +137,7 @@ def init_settings():
         ASR_MDL = ASR_MDL + (f"@{LLM_FACTORY}" if "@" not in ASR_MDL and ASR_MDL != "" else "")
         IMAGE2TEXT_MDL = IMAGE2TEXT_MDL + (f"@{LLM_FACTORY}" if "@" not in IMAGE2TEXT_MDL and IMAGE2TEXT_MDL != "" else "")
 
+    # 定义服务基础信息
     global API_KEY, PARSERS, HOST_IP, HOST_PORT, SECRET_KEY
     API_KEY = LLM.get("api_key")
     PARSERS = LLM.get(
@@ -143,6 +149,7 @@ def init_settings():
 
     SECRET_KEY = get_or_create_secret_key()
 
+    # 定义认证配置
     global AUTHENTICATION_CONF, CLIENT_AUTHENTICATION, HTTP_APP_KEY, GITHUB_OAUTH, FEISHU_OAUTH, OAUTH_CONFIG
     # authentication
     AUTHENTICATION_CONF = get_base_config("authentication", {})
@@ -155,6 +162,7 @@ def init_settings():
 
     OAUTH_CONFIG = get_base_config("oauth", {})
 
+    # 定义文档引擎
     global DOC_ENGINE, docStoreConn, retrievaler, kg_retrievaler
     DOC_ENGINE = os.environ.get("DOC_ENGINE", "elasticsearch")
     # DOC_ENGINE = os.environ.get('DOC_ENGINE', "opensearch")
@@ -168,15 +176,18 @@ def init_settings():
     else:
         raise Exception(f"Not supported doc engine: {DOC_ENGINE}")
 
+    # 实例化 nlp 和 graphrag 检索器
     retrievaler = search.Dealer(docStoreConn)
     kg_retrievaler = kg_search.KGSearch(docStoreConn)
 
+    # 沙盒 host
     if int(os.environ.get("SANDBOX_ENABLED", "0")):
         global SANDBOX_HOST
         SANDBOX_HOST = os.environ.get("SANDBOX_HOST", "sandbox-executor-manager")
 
 
 class CustomEnum(Enum):
+    ''' 添加验证和取 names 和 values 的方法 '''
     @classmethod
     def valid(cls, value):
         try:
@@ -193,7 +204,7 @@ class CustomEnum(Enum):
     def names(cls):
         return [member.name for member in cls.__members__.values()]
 
-
+# 常用结果码
 class RetCode(IntEnum, CustomEnum):
     SUCCESS = 0
     NOT_EFFECTIVE = 10

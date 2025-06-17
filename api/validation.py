@@ -20,6 +20,7 @@ import sys
 
 def python_version_validation():
     # Check python version
+    # 最小版本 python 3.10
     required_python_version = (3, 10)
     if sys.version_info < required_python_version:
         logging.info(
@@ -40,6 +41,7 @@ def download_nltk_data():
     nltk.download('punkt_tab', halt_on_error=False, quiet=True)
 
 
+# 下载必要的 nltk 数据包
 try:
     from multiprocessing import Pool
     pool = Pool(processes=1)

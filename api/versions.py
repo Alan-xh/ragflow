@@ -24,6 +24,7 @@ def get_ragflow_version() -> str:
     global RAGFLOW_VERSION_INFO
     if RAGFLOW_VERSION_INFO != "unknown":
         return RAGFLOW_VERSION_INFO
+    # 项目根目录的 VERSION 文件
     version_path = os.path.abspath(
         os.path.join(
             os.path.dirname(os.path.realpath(__file__)), os.pardir, "VERSION"

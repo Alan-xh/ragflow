@@ -20,8 +20,8 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from flask import Blueprint, Flask
 from werkzeug.wrappers.request import Request
-from flask_cors import CORS
-from flasgger import Swagger
+from flask_cors import CORS  # 跨域插件
+from flasgger import Swagger # swagger 插件
 from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 
 from api.db import StatusEnum
@@ -29,15 +29,15 @@ from api.db.db_models import close_connection
 from api.db.services import UserService
 from api.utils import CustomJSONEncoder, commands
 
-from flask_session import Session
-from flask_login import LoginManager
+from flask_session import Session # 会话插件
+from flask_login import LoginManager  # 登入插件
 from api import settings
 from api.utils.api_utils import server_error_response
 from api.constants import API_VERSION
 
 __all__ = ["app"]
 
-Request.json = property(lambda self: self.get_json(force=True, silent=True))
+Request.json = property(lambda self: self.get_json(force=True, silent=True)) # 过滤请求
 
 app = Flask(__name__)
 
@@ -47,15 +47,15 @@ swagger_config = {
     "headers": [],
     "specs": [
         {
-            "endpoint": "apispec",
-            "route": "/apispec.json",
+            "endpoint": "apispec", # apispec 规约
+            "route": "/apispec.json", # 生成的API规范JSON文件在Web服务器上的路径 127.0.0.1::8000/apispec.json
             "rule_filter": lambda rule: True,  # Include all endpoints
             "model_filter": lambda tag: True,  # Include all models
         }
     ],
-    "static_url_path": "/flasgger_static",
-    "swagger_ui": True,
-    "specs_route": "/apidocs/",
+    "static_url_path": "/flasgger_static", # 静态文件路径
+    "swagger_ui": True, # 使用Swagger UI
+    "specs_route": "/apidocs/", # API文档路径
 }
 
 
@@ -69,6 +69,7 @@ swagger = Swagger(
             "description": "",
             "version": "1.0.0",
         },
+        # 访问 api doc 的安全认证
         "securityDefinitions": {
             "ApiKeyAuth": {"type": "apiKey", "name": "Authorization", "in": "header"}
         },
@@ -77,7 +78,7 @@ swagger = Swagger(
 
 CORS(
     app, supports_credentials=True, max_age=2592000
-)  # 允许跨域请求时携带凭证 预检请求的结果缓存 30 天
+)  # 允许携带凭证跨域请求 预检请求的结果缓存 30 天
 app.url_map.strict_slashes = False  # 设置末尾带不带 /为等价的
 app.json_encoder = (
     CustomJSONEncoder  # 定制编码器，处理标准编码器无法处理的自定义数据类型
@@ -85,7 +86,7 @@ app.json_encoder = (
 app.errorhandler(Exception)(server_error_response)  # 注册了全局的错误处理函数
 
 ## convince for dev and debug
-# 配置开发和调试
+# 定义特定的服务选项
 # app.config["LOGIN_DISABLED"] = True
 app.config["SESSION_PERMANENT"] = False  # 会话非永久，重启浏览器需要重新登入
 app.config["SESSION_TYPE"] = "filesystem"  # 会话数据存在文件系统里
@@ -102,7 +103,7 @@ Session(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
-# 注册命令行
+# app 注册命令行
 commands.register_commands(app)
 
 def search_pages_path(pages_dir):
@@ -122,7 +123,7 @@ def search_pages_path(pages_dir):
 def register_page(page_path):
     path = f"{page_path}"
     '''
-    导入模块并且注册蓝图
+    导入模块，将 *_app 重命名, 并且注册蓝图 https://www.cnblogs.com/poloyy/p/15004389.html
     
     # pathlib.Path.stem 文件名部分，不包括后缀
     # pathlib.Path.parts 将路径分解成各个组成部分，并返回一个元组
@@ -132,28 +133,29 @@ def register_page(page_path):
     module_from_spec 根据一个模块规范 (spec) 创建一个空的模块对象, 返回 types.ModuleType实例
     '''
 
-    page_name = page_path.stem.removesuffix("_app")
+    page_name = page_path.stem.removesuffix("_app")  # .stem 返回路径的最后一个组件（文件名或目录名） .removesuffix() python3.9 字符串末尾移除指定后缀, 这里删除 _app
     module_name = ".".join(
-        page_path.parts[page_path.parts.index("api"): -1] + (page_name,)
+        page_path.parts[page_path.parts.index("api"): -1] + (page_name,)  # api.apps.* / api.apps.sdk.*
     )
 
-    spec = spec_from_file_location(module_name, page_path)
-    page = module_from_spec(spec)
+    spec = spec_from_file_location(module_name, page_path)  # 规约，将从命名的模块指定原路径
+    page = module_from_spec(spec) # 创建空的模块，指定路径和对应的模块名 -> types.ModuleType
+    # 给创建的模块添加 flask 和 蓝图， 并且注册到系统模块中
     page.app = app
-    page.manager = Blueprint(page_name, module_name)
+    page.manager = Blueprint(name=page_name, import_name=module_name) # 蓝图实例化
     sys.modules[module_name] = page
-    spec.loader.exec_module(page)
+    spec.loader.exec_module(page) # 加载原路径的文件中的属性和方法进入模块
     page_name = getattr(page, "page_name", page_name)
     sdk_path = "\\sdk\\" if sys.platform.startswith("win") else "/sdk/"
     url_prefix = (
         f"/api/{API_VERSION}" if sdk_path in path else f"/{API_VERSION}/{page_name}"
     )
 
-    app.register_blueprint(page.manager, url_prefix=url_prefix)
+    app.register_blueprint(page.manager, url_prefix=url_prefix)  # 添加前缀
     return url_prefix
 
 
-# 注册 apps和 sdk下所有页面
+# 注册 apps 和 sdk 下所有应用，有重复，但是不遗漏
 pages_dir = [
     Path(__file__).parent,
     Path(__file__).parent.parent / "api" / "apps",
@@ -165,12 +167,15 @@ client_urls_prefix = [
 ]
 
 
+# 用户登录认证
 @login_manager.request_loader
 def load_user(web_request):
     jwt = Serializer(secret_key=settings.SECRET_KEY)
+    # 获取 Authorization 凭证
     authorization = web_request.headers.get("Authorization")
     if authorization:
         try:
+            # 解密
             access_token = str(jwt.loads(authorization))
             
             if not access_token or not access_token.strip():
@@ -199,6 +204,7 @@ def load_user(web_request):
         return None
 
 
+# 每次请求结束，关闭数据库连接
 @app.teardown_request
 def _db_close(exc):
     close_connection()
