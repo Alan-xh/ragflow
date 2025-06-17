@@ -19,11 +19,13 @@ from strenum import StrEnum
 
 
 class StatusEnum(Enum):
+    ''' 数据状态 '''
     VALID = "1"
     INVALID = "0"
 
 
 class UserTenantRole(StrEnum):
+    ''' 用户角色 '''
     OWNER = 'owner'
     ADMIN = 'admin'
     NORMAL = 'normal'
@@ -31,11 +33,13 @@ class UserTenantRole(StrEnum):
 
 
 class TenantPermission(StrEnum):
+    ''' 租户权限 '''
     ME = 'me'
     TEAM = 'team'
 
 
 class SerializedType(IntEnum):
+    ''' 序列化类型 '''
     PICKLE = 1
     JSON = 2
 
