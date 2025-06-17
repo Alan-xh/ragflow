@@ -13,6 +13,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+
+'''
+各种枚举类型
+'''
+
 from enum import Enum
 from enum import IntEnum
 from strenum import StrEnum
@@ -78,7 +83,7 @@ class TaskStatus(StrEnum):
     DONE = "3"
     FAIL = "4"
 
-VALID_TASK_STATUS     = {TaskStatus.UNSTART, TaskStatus.RUNNING, TaskStatus.CANCEL, TaskStatus.DONE, TaskStatus.FAIL}
+VALID_TASK_STATUS = {TaskStatus.UNSTART, TaskStatus.RUNNING, TaskStatus.CANCEL, TaskStatus.DONE, TaskStatus.FAIL}
 
 class ParserType(StrEnum):
     PRESENTATION = "presentation"

@@ -13,6 +13,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+
+'''
+数据库模型
+
+peewee 数据库 ORM
+playhouse 数据库 ORM 相关拓展
+
+'''
+
 import inspect
 import logging
 import operator
@@ -46,10 +55,11 @@ def singleton(cls, *args, **kw):
     return _singleton
 
 
-CONTINUOUS_FIELD_TYPE = {IntegerField, FloatField, DateTimeField}
-AUTO_DATE_TIMESTAMP_FIELD_PREFIX = {"create", "start", "end", "update", "read_access", "write_access"}
+CONTINUOUS_FIELD_TYPE = {IntegerField, FloatField, DateTimeField} # 连续值类型
+AUTO_DATE_TIMESTAMP_FIELD_PREFIX = {"create", "start", "end", "update", "read_access", "write_access"} # 时间戳字段前缀
 
 
+''' 定义 TextField 拓展字段类型 '''
 class TextFieldType(Enum):
     MYSQL = "LONGTEXT"
     POSTGRES = "TEXT"
@@ -61,12 +71,12 @@ class LongTextField(TextField):
 
 
 class JSONField(LongTextField):
-    ''' JSON 存储字段 '''
+    ''' JSON 类型字段序列化和反序列化 '''
     default_value = {}
 
     def __init__(self, object_hook=None, object_pairs_hook=None, **kwargs):
-        self._object_hook = object_hook
-        self._object_pairs_hook = object_pairs_hook
+        self._object_hook = object_hook  # 序列化钩子函数 str -> dict -> 打印 hook 处理的 dict 
+        self._object_pairs_hook = object_pairs_hook # 输入是键值对的钩子函数
         super().__init__(**kwargs)
 
     def db_value(self, value):
@@ -85,6 +95,7 @@ class ListField(JSONField):
 
 
 class SerializedField(LongTextField):
+    ''' 可序列化字段类型 '''
     def __init__(self, serialized_type=SerializedType.PICKLE, object_hook=None, object_pairs_hook=None, **kwargs):
         self._serialized_type = serialized_type
         self._object_hook = object_hook
@@ -116,10 +127,10 @@ def is_continuous_field(cls: typing.Type) -> bool:
     '''  判断字段是否是连续字段(非离散值) '''
     if cls in CONTINUOUS_FIELD_TYPE:
         return True
-    for p in cls.__bases__:
+    for p in cls.__bases__: # __bases__负类
         if p in CONTINUOUS_FIELD_TYPE:
             return True
-        elif p is not Field and p is not object:
+        elif p is not Field and p is not object: # 递归父类
             if is_continuous_field(p):
                 return True
     else:
@@ -132,7 +143,7 @@ def auto_date_timestamp_field():
 
 
 def auto_date_timestamp_db_field():
-    ''' 自动生成各类时间戳字段 '''
+    ''' 自动生成各类时间戳数据库字段规范 '''
     return {f"f_{f}_time" for f in AUTO_DATE_TIMESTAMP_FIELD_PREFIX}
 
 
@@ -141,6 +152,7 @@ def remove_field_name_prefix(field_name):
     return field_name[2:] if field_name.startswith("f_") else field_name
 
 
+''' 基本模型 '''
 class BaseModel(Model):
     create_time = BigIntegerField(null=True, index=True)
     create_date = DateTimeField(null=True, index=True)
@@ -155,12 +167,16 @@ class BaseModel(Model):
         return self.__dict__["__data__"]
 
     def to_human_model_dict(self, only_primary_with: list = None):
+        '''
+        only_primary_with: List 去除前缀的字段，若为 None 则全部去除
+        '''
         model_dict = self.__dict__["__data__"]
 
         if not only_primary_with:
             return {remove_field_name_prefix(k): v for k, v in model_dict.items()}
 
         human_model_dict = {}
+        ''' 主键 '''
         for k in self._meta.primary_key.field_names:
             human_model_dict[remove_field_name_prefix(k)] = model_dict[k]
         for k in only_primary_with:
@@ -173,6 +189,7 @@ class BaseModel(Model):
 
     @classmethod
     def get_primary_keys_name(cls):
+        ''' 获得复合主键字段名称 '''
         return cls._meta.primary_key.field_names if isinstance(cls._meta.primary_key, CompositeKey) else [cls._meta.primary_key.name]
 
     @classmethod
