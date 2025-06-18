@@ -138,7 +138,7 @@ def is_continuous_field(cls: typing.Type) -> bool:
 
 
 def auto_date_timestamp_field():
-    ''' 自动生成各类时间戳字段 '''
+    ''' 自动生成各类阶段的时间戳字段 '''
     return {f"{f}_time" for f in AUTO_DATE_TIMESTAMP_FIELD_PREFIX}
 
 
@@ -194,10 +194,18 @@ class BaseModel(Model):
 
     @classmethod
     def getter_by(cls, attr):
-        return operator.attrgetter(attr)(cls)
+        return operator.attrgetter(attr)(cls)  # operator.attrgetter(attr) 获取一个可调用函数，调用返回对象的 attr 属性值，可以是多个属性
 
     @classmethod
     def query(cls, reverse=None, order_by=None, **kwargs):
+        ''' 
+        
+        表查询
+        :param reverse: 是否倒序
+        :param order_by: 排序字段
+        :param kwargs: 查询条件
+
+        '''
         filters = []
         for f_n, f_v in kwargs.items():
             attr_name = "%s" % f_n
@@ -205,7 +213,9 @@ class BaseModel(Model):
                 continue
             if type(f_v) in {list, set}:
                 f_v = list(f_v)
+                # 连续字段类型
                 if is_continuous_field(type(getattr(cls, attr_name))):
+                    # 处理特殊时间段的时间戳范围字段
                     if len(f_v) == 2:
                         for i, v in enumerate(f_v):
                             if isinstance(v, str) and f_n in auto_date_timestamp_field():
@@ -219,14 +229,17 @@ class BaseModel(Model):
                             filters.append(operator.attrgetter(attr_name)(cls) >= lt_value)
                         elif gt_value is not None:
                             filters.append(operator.attrgetter(attr_name)(cls) <= gt_value)
+                # 非连续数值类型
                 else:
                     filters.append(operator.attrgetter(attr_name)(cls) << f_v)
+            # 非序列类型
             else:
                 filters.append(operator.attrgetter(attr_name)(cls) == f_v)
         if filters:
             query_records = cls.select().where(*filters)
             if reverse is not None:
                 if not order_by or not hasattr(cls, f"{order_by}"):
+                    # 默认排序字段
                     order_by = "create_time"
                 if reverse is True:
                     query_records = query_records.order_by(cls.getter_by(f"{order_by}").desc())
@@ -238,6 +251,7 @@ class BaseModel(Model):
 
     @classmethod
     def insert(cls, __data=None, **insert):
+        ''' 插入数据,并在数据中添加创建时间字段和数据 '''
         if isinstance(__data, dict) and __data:
             __data[cls._meta.combined["create_time"]] = utils.current_timestamp()
         if insert:
@@ -248,6 +262,7 @@ class BaseModel(Model):
     # update and insert will call this method
     @classmethod
     def _normalize_data(cls, data, kwargs):
+        ''' insert和update都使用这个接口，将 '''
         normalized = super()._normalize_data(data, kwargs)
         if not normalized:
             return {}
@@ -267,21 +282,24 @@ class JsonSerializedField(SerializedField):
 
 
 class PooledDatabase(Enum):
+    ''' 数据库连接池 '''
     MYSQL = PooledMySQLDatabase
     POSTGRES = PooledPostgresqlDatabase
 
 
 class DatabaseMigrator(Enum):
+    ''' 数据库迁移 '''
     MYSQL = MySQLMigrator
     POSTGRES = PostgresqlMigrator
 
 
 @singleton
 class BaseDataBase:
+    ''' 单例模式根据 config 初始化数据库连接池 '''
     def __init__(self):
         database_config = settings.DATABASE.copy()
         db_name = database_config.pop("name")
-        self.database_connection = PooledDatabase[settings.DATABASE_TYPE.upper()].value(db_name, **database_config)
+        self.database_connection = PooledDatabase[settings.DATABASE_TYPE.upper()].value(db_name, **database_config) # .value 取枚举的值 数据库连接池，并实例化
         logging.info("init database on cluster mode successfully")
 
 
@@ -310,7 +328,7 @@ def with_retry(max_retries=3, retry_delay=1.0):
                     lock_name = getattr(self_obj, 'lock_name', 'unknown') if self_obj else 'unknown'
                     
                     if retry < max_retries - 1:
-                        current_delay = retry_delay * (2 ** retry)
+                        current_delay = retry_delay * (2 ** retry) # 2 ** n * retry_delay 递增重试
                         logging.warning(f"{func_name} {lock_name} failed: {str(e)}, retrying ({retry+1}/{max_retries})")
                         time.sleep(current_delay)
                     else:
@@ -324,9 +342,10 @@ def with_retry(max_retries=3, retry_delay=1.0):
 
 
 class PostgresDatabaseLock:
+    ''' postgres 咨询锁，默认会话级别 pg_try_advisory_xact_lock 是事务级别 '''
     def __init__(self, lock_name, timeout=10, db=None):
         self.lock_name = lock_name
-        self.lock_id = int(hashlib.md5(lock_name.encode()).hexdigest(), 16) % (2**31-1)
+        self.lock_id = int(hashlib.md5(lock_name.encode()).hexdigest(), 16) % (2**31-1) # int(a , 16) 16进制转10进制
         self.timeout = int(timeout)
         self.db = db if db else DB
 
@@ -362,6 +381,7 @@ class PostgresDatabaseLock:
             self.unlock()
 
     def __call__(self, func):
+        ''' 锁装饰器 '''
         @wraps(func)
         def magic(*args, **kwargs):
             with self:
@@ -371,6 +391,7 @@ class PostgresDatabaseLock:
 
 
 class MysqlDatabaseLock:
+    ''' mysql 用户级咨询锁 '''
     def __init__(self, lock_name, timeout=10, db=None):
         self.lock_name = lock_name
         self.timeout = int(timeout)
@@ -421,7 +442,7 @@ class DatabaseLock(Enum):
     MYSQL = MysqlDatabaseLock
     POSTGRES = PostgresDatabaseLock
 
-
+''' 创建数据库池连接实例和锁 '''
 DB = BaseDataBase().database_connection
 DB.lock = DatabaseLock[settings.DATABASE_TYPE.upper()].value
 
@@ -429,22 +450,25 @@ DB.lock = DatabaseLock[settings.DATABASE_TYPE.upper()].value
 def close_connection():
     try:
         if DB:
-            DB.close_stale(age=30)
+            DB.close_stale(age=30) # 关闭所有过时的连接
     except Exception as e:
         logging.exception(e)
 
 
 class DataBaseModel(BaseModel):
+    ''' 使用 Meta 绑定数据库连接实例 '''
     class Meta:
         database = DB
 
 
 @DB.connection_context()
 def init_database_tables(alter_fields=[]):
-    members = inspect.getmembers(sys.modules[__name__], inspect.isclass)
+    ''' 初始化数据库 '''
+    members = inspect.getmembers(sys.modules[__name__], inspect.isclass) # 获取当前模块的类 例如 [('Test', <class '__main__.Test'>)]
     table_objs = []
     create_failed_list = []
     for name, obj in members:
+        ''' 创建所有派生类 '''
         if obj != DataBaseModel and issubclass(obj, DataBaseModel):
             table_objs.append(obj)
 
@@ -466,6 +490,7 @@ def init_database_tables(alter_fields=[]):
 
 
 def fill_db_model_object(model_object, human_model_dict):
+    ''' 使用字典填充模型对象  '''
     for k, v in human_model_dict.items():
         attr_name = "%s" % k
         if hasattr(model_object.__class__, attr_name):
@@ -474,6 +499,25 @@ def fill_db_model_object(model_object, human_model_dict):
 
 
 class User(DataBaseModel, UserMixin):
+    '''
+    用户表 user
+
+    id: 唯一id
+    access_token: 登录凭证
+    nickname: 用户昵称
+    email: 邮箱
+    avatar: 头像
+    language: 语言
+    color_scheme: 背景颜色
+    timezone: 时区
+    last_login_time: 最后登录时间
+    is_authenticated: 认证状态
+    is_active: 活动状态
+    is_anonymous: 匿名状态
+    login_channel: 登录渠道
+    status: 状态
+    is_superuser: 超级用户
+    '''
     id = CharField(max_length=32, primary_key=True)
     access_token = CharField(max_length=255, null=True, index=True)
     nickname = CharField(max_length=100, null=False, help_text="nicky name", index=True)
@@ -503,6 +547,22 @@ class User(DataBaseModel, UserMixin):
 
 
 class Tenant(DataBaseModel):
+    '''
+    租户表 tenant
+
+    id: 唯一标识符
+    name: 租户名称
+    public_key: 公钥
+    llm_id: LLM ID
+    embd_id: embed ID
+    asr_id: asr 模型id
+    img2txt_id: 图片转文本模型id
+    rerank_id: rerank 模型id
+    tts_id: tts 模型id
+    parser_id: parser 模型id
+    credits: 剩余额度
+    status: 状态
+    '''
     id = CharField(max_length=32, primary_key=True)
     name = CharField(max_length=100, null=True, help_text="Tenant name", index=True)
     public_key = CharField(max_length=255, null=True, index=True)
@@ -521,6 +581,17 @@ class Tenant(DataBaseModel):
 
 
 class UserTenant(DataBaseModel):
+    '''
+    用户租户关联表 user_tenant
+
+    id: 唯一标识
+    user_id: 用户id
+    tenant_id: 租户id
+    role: 用户租户角色
+    invite_by: 邀请人id
+    status:状态
+
+    '''
     id = CharField(max_length=32, primary_key=True)
     user_id = CharField(max_length=32, null=False, index=True)
     tenant_id = CharField(max_length=32, null=False, index=True)
@@ -533,6 +604,16 @@ class UserTenant(DataBaseModel):
 
 
 class InvitationCode(DataBaseModel):
+    '''
+    邀请码 invitation_code
+
+    id: 唯一标识
+    code: 邀请码
+    visit_time: 访问时间
+    user_id: 邀请码对应的用户id
+    tenant_id: 邀请码对应的租户id
+    status: 邀请码状态
+    '''
     id = CharField(max_length=32, primary_key=True)
     code = CharField(max_length=32, null=False, index=True)
     visit_time = DateTimeField(null=True, index=True)
@@ -545,6 +626,14 @@ class InvitationCode(DataBaseModel):
 
 
 class LLMFactories(DataBaseModel):
+    '''
+    模型供应商注册 llm_factories
+
+    name: 模型名称
+    logo: logo_base64
+    tags: 类型
+    status: 状态
+    '''
     name = CharField(max_length=128, null=False, help_text="LLM factory name", primary_key=True)
     logo = TextField(null=True, help_text="llm logo base64")
     tags = CharField(max_length=255, null=False, help_text="LLM, Text Embedding, Image2Text, ASR", index=True)
@@ -558,6 +647,17 @@ class LLMFactories(DataBaseModel):
 
 
 class LLM(DataBaseModel):
+    '''
+    模型注册 llm
+
+    llm_name: 模型名称
+    model_type: 模型类型
+    fid: 模型工厂id
+    max_tokens: 最大token数
+    tags: 模型类型
+    is_tools: 是否为支持工具
+    status: 状态
+    '''
     # LLMs dictionary
     llm_name = CharField(max_length=128, null=False, help_text="LLM name", index=True)
     model_type = CharField(max_length=128, null=False, help_text="LLM, Text Embedding, Image2Text, ASR", index=True)
@@ -577,6 +677,19 @@ class LLM(DataBaseModel):
 
 
 class TenantLLM(DataBaseModel):
+    '''
+    租户提供的模型 tenat_llm
+
+    tenant_id: 租户 id
+    llm_factory: 模型供应商
+    model_type: 模型类型
+    llm_name: 模型名称
+    api_key: key
+    api_base: base url
+    max_tokens: 最大 token 数
+    use_count: 使用次数
+    
+    '''
     tenant_id = CharField(max_length=32, null=False, index=True)
     llm_factory = CharField(max_length=128, null=False, help_text="LLM factory name", index=True)
     model_type = CharField(max_length=128, null=True, help_text="LLM, Text Embedding, Image2Text, ASR", index=True)
@@ -595,6 +708,14 @@ class TenantLLM(DataBaseModel):
 
 
 class TenantLangfuse(DataBaseModel):
+    '''
+    租户模型 Langfuse 观测  tenant_langfuse
+
+    tenant_id: 租户 ID
+    secret_key: Langfuse 密钥
+    public_key: Langfuse 公钥
+    host: Langfuse 域名
+    '''
     tenant_id = CharField(max_length=32, null=False, primary_key=True)
     secret_key = CharField(max_length=2048, null=False, help_text="SECRET KEY", index=True)
     public_key = CharField(max_length=2048, null=False, help_text="PUBLIC KEY", index=True)
@@ -608,6 +729,28 @@ class TenantLangfuse(DataBaseModel):
 
 
 class Knowledgebase(DataBaseModel):
+    '''
+    知识库  knowledgebase
+
+    id: 唯一标识
+    avatar: b64 头像
+    namme: 知识库名称
+    language: 语言
+    description: 描述
+    embd_id: embedding model id
+    permission: 权限 个人或者团队
+    created_by: 创建者
+    doc_num: 文档数量
+    token_num: token数量
+    chunk_num: 分块数量
+    similarity_threshold: 相似度阈值
+    vector_similarity_weight: 向量相似度权重
+
+    parser_id: 解析器 id
+    parser_config: 解析器配置
+    pagerank: 页面排名
+    status: 状态
+    '''
     id = CharField(max_length=32, primary_key=True)
     avatar = TextField(null=True, help_text="avatar base64 string")
     tenant_id = CharField(max_length=32, null=False, index=True)
@@ -636,6 +779,31 @@ class Knowledgebase(DataBaseModel):
 
 
 class Document(DataBaseModel):
+    '''
+    文档表 document
+
+    id: 文档唯一标识 id
+    thumbnail: 文档缩略图 base64
+    kb_id: 关联知识库 id
+    parser_id: 文档解析器 id
+    parser_config: 文档解析器配置
+    source_type: 文档来源 默认为 local
+    type: 文档拓展名
+    create_by: 文档创建者
+    name: 文档名称
+    location: 文档存储位置
+    size: 文档大小
+    token_num: 文档 token 数
+    chunk_num: 文档 chunk 数
+    progress: 文档解析进度
+    progress_msg: 文档解析进度信息
+    progress_begin_at: 文档解析开始时间
+    process_duation: 文档解析耗时
+    meta_fields: 文档元数据
+
+    run: 文档运行状态 1 表示正在运行，2表示被取消
+    status: 状态
+    '''
     id = CharField(max_length=32, primary_key=True)
     thumbnail = TextField(null=True, help_text="thumbnail base64 string")
     kb_id = CharField(max_length=256, null=False, index=True)
@@ -663,6 +831,19 @@ class Document(DataBaseModel):
 
 
 class File(DataBaseModel):
+    '''
+    文件表 file
+
+    id: 文件唯一标识
+    parent_id: 父级文件id
+    tenant_id: 租户id
+    create_by: 创建人
+    name: 文件名
+    location: 文件存储位置
+    size: 文件大小
+    type: 文件拓展名
+    status: 文件状态
+    '''
     id = CharField(max_length=32, primary_key=True)
     parent_id = CharField(max_length=32, null=False, help_text="parent folder id", index=True)
     tenant_id = CharField(max_length=32, null=False, help_text="tenant id", index=True)
@@ -678,6 +859,14 @@ class File(DataBaseModel):
 
 
 class File2Document(DataBaseModel):
+    '''
+    文件文档关联表
+
+    id: 唯一标识
+    file_id: 文件id
+    document_id: 文档id
+
+    '''
     id = CharField(max_length=32, primary_key=True)
     file_id = CharField(max_length=32, null=True, help_text="file id", index=True)
     document_id = CharField(max_length=32, null=True, help_text="document id", index=True)
@@ -687,6 +876,25 @@ class File2Document(DataBaseModel):
 
 
 class Task(DataBaseModel):
+    '''
+    任务表
+
+    id: 唯一标识
+    doc_id: 任务处理的文档id
+    from_page: 任务处理的开始页码
+    to_page: 任务处理的结束页码
+    task_type: 任务类型
+    priority: 优先级
+
+    begin_at: 任务开始时间
+    process_duation: 任务处理时长
+    
+    progress: 任务进度
+    progress_msg: 任务进度信息
+    retry_times: 任务重试次数
+    digest: 任务摘要
+    chunk_id: 块ids
+    '''
     id = CharField(max_length=32, primary_key=True)
     doc_id = CharField(max_length=32, null=False, index=True)
     from_page = IntegerField(default=0)
@@ -705,6 +913,32 @@ class Task(DataBaseModel):
 
 
 class Dialog(DataBaseModel):
+    '''
+    会话记录 dialog
+    
+    id: 唯一标识符
+    tenant_id: 租户id
+    name: 对话应用名称
+    description: 对话应用描述
+    icon: 对话应用图标 base64
+    language: 语言
+    llm_id: 模型id
+
+    llm_setting: 模型设置
+    prompt_type: 提示词类型
+    prompt_config: 提示词配置
+
+    similarity_threshold: 相似度阈值
+    vector_similarity_weight: 向量相似度权重
+
+    top_n: 引用数量
+    top_k: 粗排数量
+    do_refer: 是否需要在答案中插入参考索引 默认为是
+    rerank_id: 默认重排模型
+
+    kb_ids: 关联知识库id
+    status: 状态
+    '''
     id = CharField(max_length=32, primary_key=True)
     tenant_id = CharField(max_length=32, null=False, index=True)
     name = CharField(max_length=255, null=True, help_text="dialog application name", index=True)
@@ -739,6 +973,17 @@ class Dialog(DataBaseModel):
 
 
 class Conversation(DataBaseModel):
+    '''
+    对话消息记录 conversation
+    
+    id: 唯一标识符
+    dialog_id: 会话id
+    name: 会话名称
+    message: 会话消息
+    reference: 引用
+    user_id: 用户id
+    '''
+
     id = CharField(max_length=32, primary_key=True)
     dialog_id = CharField(max_length=32, null=False, index=True)
     name = CharField(max_length=255, null=True, help_text="converastion name", index=True)
@@ -751,6 +996,16 @@ class Conversation(DataBaseModel):
 
 
 class APIToken(DataBaseModel):
+    '''
+    api token记录表 api_token
+    
+    tenant_id: 租户id
+    token: api token
+    dialog_id: 会话id
+    source: 来源类型
+    beta: 是否为测试
+    '''
+
     tenant_id = CharField(max_length=32, null=False, index=True)
     token = CharField(max_length=255, null=False, index=True)
     dialog_id = CharField(max_length=32, null=True, index=True)
@@ -763,6 +1018,21 @@ class APIToken(DataBaseModel):
 
 
 class API4Conversation(DataBaseModel):
+    '''
+    工作流调用时每条记录的详细记录 api_4_conversation
+
+    id: 唯一标识符
+    dialog_id: 会话 id
+    user_id: 用户 id
+    message: 消息
+    reference: 参考
+    tokens: 使用tokens数量
+    source: 会话来源
+    dsl: 会话 dsl
+    duration: 执行时间
+    round: 轮次
+    thumb_up: 用户反馈
+    '''
     id = CharField(max_length=32, primary_key=True)
     dialog_id = CharField(max_length=32, null=False, index=True)
     user_id = CharField(max_length=255, null=False, help_text="user_id", index=True)
@@ -780,6 +1050,21 @@ class API4Conversation(DataBaseModel):
 
 
 class UserCanvas(DataBaseModel):
+    '''
+    用户工作流 user_canvas
+
+    id: 唯一标识
+    avatar: 头像 base64
+    user_id: 用户 id
+    title: 画板 标题
+
+    permission: 权限
+    description: 描述
+    canvas_type: 画板类型
+    dsl: dsl
+    
+    '''
+
     id = CharField(max_length=32, primary_key=True)
     avatar = TextField(null=True, help_text="avatar base64 string")
     user_id = CharField(max_length=255, null=False, help_text="user_id", index=True)
@@ -795,6 +1080,16 @@ class UserCanvas(DataBaseModel):
 
 
 class CanvasTemplate(DataBaseModel):
+    '''
+    工作流模板 canvas_template
+
+    id: 唯一标识符
+    avatar: 模板图标
+    title: 工作流
+    description: 描述
+    canvas_type: 工作流类型
+    dsl: 工作流模板
+    '''
     id = CharField(max_length=32, primary_key=True)
     avatar = TextField(null=True, help_text="avatar base64 string")
     title = CharField(max_length=255, null=True, help_text="Canvas title")
@@ -808,6 +1103,16 @@ class CanvasTemplate(DataBaseModel):
 
 
 class UserCanvasVersion(DataBaseModel):
+    '''
+    用户工作流版本 user_canvas_version
+
+    id: 唯一标识符
+    user_canvas_id: 工作流id
+
+    title: 标题
+    description: 描述
+    dsl: 工作流 dsl
+    '''
     id = CharField(max_length=32, primary_key=True)
     user_canvas_id = CharField(max_length=255, null=False, help_text="user_canvas_id", index=True)
 
@@ -820,7 +1125,8 @@ class UserCanvasVersion(DataBaseModel):
 
 
 def migrate_db():
-    migrator = DatabaseMigrator[settings.DATABASE_TYPE.upper()].value(DB)
+    migrator = DatabaseMigrator[settings.DATABASE_TYPE.upper()].value(DB)  # 获取数据库迁移器  MySQLMigrator | PostgresqlMigrator
+    ''' 对各种表格添加字段 '''
     try:
         migrate(migrator.add_column("file", "source_type", CharField(max_length=128, null=False, default="", help_text="where dose this document come from", index=True)))
     except Exception:
