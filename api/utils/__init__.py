@@ -197,8 +197,9 @@ def timestamp_to_date(timestamp, format_string="%Y-%m-%d %H:%M:%S"):
 
 
 def date_string_to_timestamp(time_str, format_string="%Y-%m-%d %H:%M:%S"):
+    ''' 时间字符串转纪元时间戳 '''
     time_array = time.strptime(time_str, format_string)
-    time_stamp = int(time.mktime(time_array) * 1000)
+    time_stamp = int(time.mktime(time_array) * 1000) # 毫秒级时间戳
     return time_stamp
 
 
