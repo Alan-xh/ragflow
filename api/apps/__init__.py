@@ -142,13 +142,13 @@ def register_page(page_path):
     page = module_from_spec(spec) # 创建空的模块，指定路径和对应的模块名 -> types.ModuleType
     # 给创建的模块添加 flask 和 蓝图， 并且注册到系统模块中
     page.app = app
-    page.manager = Blueprint(name=page_name, import_name=module_name) # 蓝图实例化
+    page.manager = Blueprint(name=page_name, import_name=module_name) # 添加蓝图实例属性 .manager, 一般 import_name = __name__ (模块名)
     sys.modules[module_name] = page
     spec.loader.exec_module(page) # 加载原路径的文件中的属性和方法进入模块
     page_name = getattr(page, "page_name", page_name)
     sdk_path = "\\sdk\\" if sys.platform.startswith("win") else "/sdk/"
     url_prefix = (
-        f"/api/{API_VERSION}" if sdk_path in path else f"/{API_VERSION}/{page_name}"
+        f"/api/{API_VERSION}" if sdk_path in path else f"/{API_VERSION}/{page_name}" # api 使用 /api/API_VERSION 前缀, 非 api 文件下的路由使用 /API_VERSION//page_name 前缀
     )
 
     app.register_blueprint(page.manager, url_prefix=url_prefix)  # 添加前缀
