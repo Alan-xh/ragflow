@@ -18,6 +18,7 @@ from .reload_config_base import ReloadConfigBase
 
 
 class RuntimeConfig(ReloadConfigBase):
+    ''' 任务运行时配置 '''
     DEBUG = None
     WORK_MODE = None
     HTTP_PORT = None

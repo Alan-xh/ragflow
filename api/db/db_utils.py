@@ -25,9 +25,14 @@ from api.db.db_models import DB, DataBaseModel
 
 @DB.connection_context()
 def bulk_insert_into_db(model, data_source, replace_on_conflict=False):
+    ''' 
+    批量插入数据 time 是时间戳, date 是时间 
+    replace_on_conflict: 冲突时是否保留原始数据
+    '''
     DB.create_tables([model])
 
     for i, data in enumerate(data_source):
+        ''' 更新 create 和 update 时间字段'''
         current_time = current_timestamp() + i
         current_date = timestamp_to_date(current_time)
         if 'create_time' not in data:
@@ -36,7 +41,7 @@ def bulk_insert_into_db(model, data_source, replace_on_conflict=False):
         data['update_time'] = current_time
         data['update_date'] = current_date
 
-    preserve = tuple(data_source[0].keys() - {'create_time', 'create_date'})
+    preserve = tuple(data_source[0].keys() - {'create_time', 'create_date'}) # 忽略 create_time 和 create_date 字段
 
     batch_size = 1000
 
@@ -45,13 +50,14 @@ def bulk_insert_into_db(model, data_source, replace_on_conflict=False):
             query = model.insert_many(data_source[i:i + batch_size])
             if replace_on_conflict:
                 if isinstance(DB, PooledMySQLDatabase):
-                    query = query.on_conflict(preserve=preserve)
+                    query = query.on_conflict(preserve=preserve) # preserve = True 相当于 ON CONFLICT DO NOTHING
                 else:
                     query = query.on_conflict(conflict_target="id", preserve=preserve)
             query.execute()
 
 
 def get_dynamic_db_model(base, job_id):
+    ''' 根据 job_id 获得表模型 '''
     return type(base.model(
         table_index=get_dynamic_tracking_table_index(job_id=job_id)))
 
@@ -61,6 +67,7 @@ def get_dynamic_tracking_table_index(job_id):
 
 
 def fill_db_model_object(model_object, human_model_dict):
+    ''' 使用字典填充表模型对象 with f_ '''
     for k, v in human_model_dict.items():
         attr_name = 'f_%s' % k
         if hasattr(model_object.__class__, attr_name):
@@ -87,12 +94,19 @@ supported_operators = {
 
 def query_dict2expression(
         model: type[DataBaseModel], query: dict[str, bool | int | str | list | tuple]):
+    ''' 
+    将查询参数转换成查询表达式 
+    
+    model: 数据库模型类
+    query: Dict[str, bool | int | str | list | tuple], 查询参数 例如 {"<=": ["id", "name", "age"]}
+    '''
     expression = []
 
     for field, value in query.items():
+        # 如果 value 不是列表或者元组，则执行等于操作
         if not isinstance(value, (list, tuple)):
             value = ('==', value)
-        op, *val = value
+        op, *val = value  # 序列解包，和函数解包类似，将第一个字返回 op, 其他参数返回列表 val
 
         field = getattr(model, f'f_{field}')
         value = supported_operators[op](
@@ -101,11 +115,20 @@ def query_dict2expression(
             *val)
         expression.append(value)
 
-    return reduce(operator.iand, expression)
+    return reduce(operator.iand, expression) # 遍历进行 按位逻辑与操作
 
 
 def query_db(model: type[DataBaseModel], limit: int = 0, offset: int = 0,
              query: dict = None, order_by: str | list | tuple | None = None):
+    '''
+    表查询统一接口
+
+    @param model:  表模型
+    @param limit:  查询结果数量
+    @param offset: 查询结果偏移量
+    @param query:  查询条件,自定义字典形式
+    @param order_by: 排序字段
+    '''
     data = model.select()
     if query:
         data = data.where(query_dict2expression(model, query))
