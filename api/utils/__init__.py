@@ -88,8 +88,7 @@ def get_base_config(key, default=None):
     return CONFIGS.get(key, default)
 
 
-use_deserialize_safe_module = get_base_config(
-    'use_deserialize_safe_module', False)
+use_deserialize_safe_module = get_base_config('use_deserialize_safe_module', False)
 
 
 class BaseType:
@@ -179,8 +178,7 @@ def json_dumps(src, byte=False, indent=None, with_type=False):
 def json_loads(src, object_hook=None, object_pairs_hook=None):
     if isinstance(src, bytes):
         src = bytes_to_string(src)
-    return json.loads(src, object_hook=object_hook,
-                      object_pairs_hook=object_pairs_hook)
+    return json.loads(src, object_hook=object_hook, object_pairs_hook=object_pairs_hook)
 
 
 def current_timestamp():
@@ -197,9 +195,9 @@ def timestamp_to_date(timestamp, format_string="%Y-%m-%d %H:%M:%S"):
 
 
 def date_string_to_timestamp(time_str, format_string="%Y-%m-%d %H:%M:%S"):
-    ''' 时间字符串转纪元时间戳 '''
+    '''时间字符串转纪元时间戳'''
     time_array = time.strptime(time_str, format_string)
-    time_stamp = int(time.mktime(time_array) * 1000) # 毫秒级时间戳
+    time_stamp = int(time.mktime(time_array) * 1000)  # 毫秒级时间戳
     return time_stamp
 
 
@@ -212,29 +210,24 @@ def serialize_b64(src, to_str=False):
 
 
 def deserialize_b64(src):
-    src = base64.b64decode(
-        string_to_bytes(src) if isinstance(
-            src, str) else src)
+    src = base64.b64decode(string_to_bytes(src) if isinstance(src, str) else src)
     if use_deserialize_safe_module:
         return restricted_loads(src)
     return pickle.loads(src)
 
 
-safe_module = {
-    'numpy',
-    'rag_flow'
-}
+safe_module = {'numpy', 'rag_flow'}
 
 
 class RestrictedUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
         import importlib
+
         if module.split('.')[0] in safe_module:
             _module = importlib.import_module(module)
             return getattr(_module, name)
         # Forbid everything else.
-        raise pickle.UnpicklingError("global '%s.%s' is forbidden" %
-                                     (module, name))
+        raise pickle.UnpicklingError("global '%s.%s' is forbidden" % (module, name))
 
 
 def restricted_loads(src):
@@ -250,7 +243,12 @@ def get_lan_ip():
         def get_interface_ip(ifname):
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             return socket.inet_ntoa(
-                fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s', string_to_bytes(ifname[:15])))[20:24])
+                fcntl.ioctl(
+                    s.fileno(),
+                    0x8915,
+                    struct.pack('256s', string_to_bytes(ifname[:15])),
+                )[20:24]
+            )
 
     ip = socket.gethostbyname(socket.getfqdn())
     if ip.startswith("127.") and os.name != "nt":
@@ -280,8 +278,9 @@ def from_dict_hook(in_dict: dict):
         if in_dict["module"] is None:
             return in_dict["data"]
         else:
-            return getattr(importlib.import_module(
-                in_dict["module"]), in_dict["type"])(**in_dict["data"])
+            return getattr(importlib.import_module(in_dict["module"]), in_dict["type"])(
+                **in_dict["data"]
+            )
     else:
         return in_dict
 
@@ -298,16 +297,12 @@ def decrypt_database_password(password):
         raise ValueError("No private key")
 
     module_fun = encrypt_module.split("#")
-    pwdecrypt_fun = getattr(
-        importlib.import_module(
-            module_fun[0]),
-        module_fun[1])
+    pwdecrypt_fun = getattr(importlib.import_module(module_fun[0]), module_fun[1])
 
     return pwdecrypt_fun(private_key, password)
 
 
-def decrypt_database_config(
-        database=None, passwd_key="password", name="database"):
+def decrypt_database_config(database=None, passwd_key="password", name="database"):
     if not database:
         database = get_base_config(name, {})
 
@@ -318,8 +313,7 @@ def decrypt_database_config(
 def update_config(key, value, conf_name=SERVICE_CONF):
     conf_path = conf_realpath(conf_name=conf_name)
     if not os.path.isabs(conf_path):
-        conf_path = os.path.join(
-            file_utils.get_project_base_directory(), conf_path)
+        conf_path = os.path.join(file_utils.get_project_base_directory(), conf_path)
 
     with FileLock(os.path.join(os.path.dirname(conf_path), ".lock")):
         config = file_utils.load_yaml_conf(conf_path=conf_path) or {}
@@ -332,8 +326,14 @@ def get_uuid():
 
 
 def datetime_format(date_time: datetime.datetime) -> datetime.datetime:
-    return datetime.datetime(date_time.year, date_time.month, date_time.day,
-                             date_time.hour, date_time.minute, date_time.second)
+    return datetime.datetime(
+        date_time.year,
+        date_time.month,
+        date_time.day,
+        date_time.hour,
+        date_time.minute,
+        date_time.second,
+    )
 
 
 def get_format_time() -> datetime.datetime:
@@ -352,29 +352,32 @@ def elapsed2time(elapsed):
 
 
 def decrypt(line):
+    '''密码解密'''
     file_path = os.path.join(
-        file_utils.get_project_base_directory(),
-        "conf",
-        "private.pem")
+        file_utils.get_project_base_directory(), "conf", "private.pem"
+    )
     rsa_key = RSA.importKey(open(file_path).read(), "Welcome")
-    cipher = Cipher_pkcs1_v1_5.new(rsa_key)
-    return cipher.decrypt(base64.b64decode(
-        line), "Fail to decrypt password!").decode('utf-8')
+    cipher = Cipher_pkcs1_v1_5.new(rsa_key)  # 创建密码器
+    return cipher.decrypt(base64.b64decode(line), "Fail to decrypt password!").decode(
+        'utf-8'
+    )
 
 
 def decrypt2(crypt_text):
+    '''密码解密'''
     from base64 import b64decode, b16decode
     from Crypto.Cipher import PKCS1_v1_5 as Cipher_PKCS1_v1_5
     from Crypto.PublicKey import RSA
+
+    # 补全解密字节数据
     decode_data = b64decode(crypt_text)
     if len(decode_data) == 127:
         hex_fixed = '00' + decode_data.hex()
         decode_data = b16decode(hex_fixed.upper())
 
     file_path = os.path.join(
-        file_utils.get_project_base_directory(),
-        "conf",
-        "private.pem")
+        file_utils.get_project_base_directory(), "conf", "private.pem"
+    )
     pem = open(file_path).read()
     rsa_key = RSA.importKey(pem, "Welcome")
     cipher = Cipher_PKCS1_v1_5.new(rsa_key)
@@ -386,9 +389,13 @@ def download_img(url):
     if not url:
         return ""
     response = requests.get(url)
-    return "data:" + \
-        response.headers.get('Content-Type', 'image/jpg') + ";" + \
-        "base64," + base64.b64encode(response.content).decode("utf-8")
+    return (
+        "data:"
+        + response.headers.get('Content-Type', 'image/jpg')
+        + ";"
+        + "base64,"
+        + base64.b64encode(response.content).decode("utf-8")
+    )
 
 
 def delta_seconds(date_string: str):
