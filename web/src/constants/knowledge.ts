@@ -15,6 +15,14 @@ export enum RunningStatus {
   FAIL = '4', // need to refresh
 }
 
+export const RunningStatusMap = {
+  [RunningStatus.UNSTART]: 'Pending',
+  [RunningStatus.RUNNING]: 'Running',
+  [RunningStatus.CANCEL]: 'Cancel',
+  [RunningStatus.DONE]: 'Success',
+  [RunningStatus.FAIL]: 'Failed',
+};
+
 export enum ModelVariableType {
   Improvise = 'Improvise',
   Precise = 'Precise',
@@ -23,25 +31,25 @@ export enum ModelVariableType {
 
 export const settledModelVariableMap = {
   [ModelVariableType.Improvise]: {
-    temperature: 0.9,
+    temperature: 0.8,
     top_p: 0.9,
-    frequency_penalty: 0.2,
-    presence_penalty: 0.4,
-    max_tokens: 512,
+    frequency_penalty: 0.1,
+    presence_penalty: 0.1,
+    max_tokens: 4096,
   },
   [ModelVariableType.Precise]: {
-    temperature: 0.1,
-    top_p: 0.3,
-    frequency_penalty: 0.7,
-    presence_penalty: 0.4,
-    max_tokens: 512,
+    temperature: 0.2,
+    top_p: 0.75,
+    frequency_penalty: 0.5,
+    presence_penalty: 0.5,
+    max_tokens: 4096,
   },
   [ModelVariableType.Balance]: {
     temperature: 0.5,
-    top_p: 0.5,
-    frequency_penalty: 0.7,
-    presence_penalty: 0.4,
-    max_tokens: 512,
+    top_p: 0.85,
+    frequency_penalty: 0.3,
+    presence_penalty: 0.2,
+    max_tokens: 4096,
   },
 };
 
@@ -57,6 +65,7 @@ export enum LlmModelType {
 export enum KnowledgeSearchParams {
   DocumentId = 'doc_id',
   KnowledgeId = 'id',
+  Type = 'type',
 }
 
 export enum DocumentType {

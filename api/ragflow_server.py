@@ -21,9 +21,9 @@ import os
 import sys
 sys.path.insert(0, r"D:\Projects\ragflow")
 
-from api.utils.log_utils import initRootLogger
+from common.log_utils import init_root_logger
 from plugin import GlobalPluginManager
-initRootLogger("ragflow_server")
+init_root_logger("ragflow_server")
 
 import logging
 import signal
@@ -34,16 +34,17 @@ import uuid
 
 from werkzeug.serving import run_simple
 from api import settings
-from api.apps import app
+from api.apps import app, smtp_mail_server
 from api.db.runtime_config import RuntimeConfig
 from api.db.services.document_service import DocumentService
-from api import utils
+from common.file_utils import get_project_base_directory
 
 from api.db.db_models import init_database_tables as init_web_db
 from api.db.init_data import init_web_data
 from api.versions import get_ragflow_version
-from api.utils import show_configs
+from common.config_utils import show_configs
 from rag.settings import print_rag_settings
+from rag.utils.mcp_tool_call_conn import shutdown_all_mcp_sessions
 from rag.utils.redis_conn import RedisDistributedLock
 
 stop_event = threading.Event()
@@ -74,32 +75,36 @@ def update_progress():
             if redis_lock.acquire():
                 DocumentService.update_progress()
                 redis_lock.release()
-            stop_event.wait(6)
         except Exception:
             logging.exception("update_progress exception")
         finally:
-            redis_lock.release()
+            try:
+                redis_lock.release()
+            except Exception:
+                logging.exception("update_progress exception")
+            stop_event.wait(6)
 
 def signal_handler(sig, frame):
     logging.info("Received interrupt signal, shutting down...")
+    shutdown_all_mcp_sessions()
     stop_event.set()
     time.sleep(1)
     sys.exit(0)
 
 if __name__ == '__main__':
     logging.info(r"""
-        ____   ___    ______ ______ __               
+        ____   ___    ______ ______ __
        / __ \ /   |  / ____// ____// /____  _      __
       / /_/ // /| | / / __ / /_   / // __ \| | /| / /
-     / _, _// ___ |/ /_/ // __/  / // /_/ /| |/ |/ / 
-    /_/ |_|/_/  |_|\____//_/    /_/ \____/ |__/|__/                             
+     / _, _// ___ |/ /_/ // __/  / // /_/ /| |/ |/ /
+    /_/ |_|/_/  |_|\____//_/    /_/ \____/ |__/|__/
 
     """)
     logging.info(
         f'RAGFlow version: {get_ragflow_version()}'
     )
     logging.info(
-        f'project base: {utils.file_utils.get_project_base_directory()}'
+        f'project base: {get_project_base_directory()}'
     )
     show_configs()
     settings.init_settings()
@@ -151,6 +156,18 @@ if __name__ == '__main__':
             threading.Timer(1.0, delayed_start_update_progress).start()
     else:
         threading.Timer(1.0, delayed_start_update_progress).start()
+
+    # init smtp server
+    if settings.SMTP_CONF:
+        app.config["MAIL_SERVER"] = settings.MAIL_SERVER
+        app.config["MAIL_PORT"] = settings.MAIL_PORT
+        app.config["MAIL_USE_SSL"] = settings.MAIL_USE_SSL
+        app.config["MAIL_USE_TLS"] = settings.MAIL_USE_TLS
+        app.config["MAIL_USERNAME"] = settings.MAIL_USERNAME
+        app.config["MAIL_PASSWORD"] = settings.MAIL_PASSWORD
+        app.config["MAIL_DEFAULT_SENDER"] = settings.MAIL_DEFAULT_SENDER
+        smtp_mail_server.init_app(app)
+
 
     # start http server
     try:

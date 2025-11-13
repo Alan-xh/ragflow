@@ -1,15 +1,18 @@
-import { useTheme } from '@/components/theme-provider';
+import { NodeCollapsible } from '@/components/collapse';
+import { RAGFlowAvatar } from '@/components/ragflow-avatar';
 import { useFetchKnowledgeList } from '@/hooks/knowledge-hooks';
 import { IRetrievalNode } from '@/interfaces/database/flow';
-import { UserOutlined } from '@ant-design/icons';
-import { Handle, NodeProps, Position } from '@xyflow/react';
-import { Avatar, Flex } from 'antd';
+import { NodeProps, Position } from '@xyflow/react';
 import classNames from 'classnames';
 import { get } from 'lodash';
-import { memo, useMemo } from 'react';
-import { LeftHandleStyle, RightHandleStyle } from './handle-icon';
+import { memo } from 'react';
+import { NodeHandleId } from '../../constant';
+import { useGetVariableLabelByValue } from '../../hooks/use-get-begin-query';
+import { CommonHandle, LeftEndHandle } from './handle';
 import styles from './index.less';
 import NodeHeader from './node-header';
+import { NodeWrapper } from './node-wrapper';
+import { ToolBar } from './toolbar';
 
 function InnerRetrievalNode({
   id,
@@ -18,72 +21,52 @@ function InnerRetrievalNode({
   selected,
 }: NodeProps<IRetrievalNode>) {
   const knowledgeBaseIds: string[] = get(data, 'form.kb_ids', []);
-  const { theme } = useTheme();
   const { list: knowledgeList } = useFetchKnowledgeList(true);
-  const knowledgeBases = useMemo(() => {
-    return knowledgeBaseIds.map((x) => {
-      const item = knowledgeList.find((y) => x === y.id);
-      return {
-        name: item?.name,
-        avatar: item?.avatar,
-        id: x,
-      };
-    });
-  }, [knowledgeList, knowledgeBaseIds]);
+
+  const getLabel = useGetVariableLabelByValue(id);
 
   return (
-    <section
-      className={classNames(
-        styles.logicNode,
-        theme === 'dark' ? styles.dark : '',
-        {
-          [styles.selectedNode]: selected,
-        },
-      )}
-    >
-      <Handle
-        id="c"
-        type="source"
-        position={Position.Left}
-        isConnectable={isConnectable}
-        className={styles.handle}
-        style={LeftHandleStyle}
-      ></Handle>
-      <Handle
-        type="source"
-        position={Position.Right}
-        isConnectable={isConnectable}
-        className={styles.handle}
-        style={RightHandleStyle}
-        id="b"
-      ></Handle>
-      <NodeHeader
-        id={id}
-        name={data.name}
-        label={data.label}
-        className={classNames({
-          [styles.nodeHeader]: knowledgeBaseIds.length > 0,
-        })}
-      ></NodeHeader>
-      <Flex vertical gap={8}>
-        {knowledgeBases.map((knowledge) => {
-          return (
-            <div className={styles.nodeText} key={knowledge.id}>
-              <Flex align={'center'} gap={6}>
-                <Avatar
-                  size={26}
-                  icon={<UserOutlined />}
-                  src={knowledge.avatar}
-                />
-                <Flex className={styles.knowledgeNodeName} flex={1}>
-                  {knowledge.name}
-                </Flex>
-              </Flex>
-            </div>
-          );
-        })}
-      </Flex>
-    </section>
+    <ToolBar selected={selected} id={id} label={data.label}>
+      <NodeWrapper selected={selected}>
+        <LeftEndHandle></LeftEndHandle>
+        <CommonHandle
+          id={NodeHandleId.Start}
+          type="source"
+          position={Position.Right}
+          isConnectable={isConnectable}
+          nodeId={id}
+          isConnectableEnd={false}
+        ></CommonHandle>
+        <NodeHeader
+          id={id}
+          name={data.name}
+          label={data.label}
+          className={classNames({
+            [styles.nodeHeader]: knowledgeBaseIds.length > 0,
+          })}
+        ></NodeHeader>
+        <NodeCollapsible items={knowledgeBaseIds}>
+          {(id) => {
+            const item = knowledgeList.find((y) => id === y.id);
+            const label = getLabel(id);
+
+            return (
+              <div className={styles.nodeText} key={id}>
+                <div className="flex items-center gap-1.5">
+                  <RAGFlowAvatar
+                    className="size-6 rounded-lg"
+                    avatar={id}
+                    name={item?.name || (label as string) || 'CN'}
+                  />
+
+                  <div className={'truncate flex-1'}>{label || item?.name}</div>
+                </div>
+              </div>
+            );
+          }}
+        </NodeCollapsible>
+      </NodeWrapper>
+    </ToolBar>
   );
 }
 

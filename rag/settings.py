@@ -15,15 +15,17 @@
 #
 import os
 import logging
-from api.utils import get_base_config, decrypt_database_config
-from api.utils.file_utils import get_project_base_directory
+from common.config_utils import get_base_config, decrypt_database_config
+from common.file_utils import get_project_base_directory
+from common.misc_utils import pip_install_torch
+from common import globals
 
 # Server
 RAG_CONF_PATH = os.path.join(get_project_base_directory(), "conf")
 
 # 获取文件引擎和存储数据库类型
 STORAGE_IMPL_TYPE = os.getenv('STORAGE_IMPL', 'MINIO')
-DOC_ENGINE = os.getenv('DOC_ENGINE', 'elasticsearch')
+globals.DOC_ENGINE = os.getenv('DOC_ENGINE', 'elasticsearch')
 
 ES = {}
 INFINITY = {}
@@ -33,12 +35,13 @@ MINIO = {}
 OSS = {}
 OS = {}
 
-# 根据环境变量初始化所选配置数据，解决缺少配置导致初始化错误的问题
-if DOC_ENGINE == 'elasticsearch':
+# Initialize the selected configuration data based on environment variables to solve the problem of initialization errors due to lack of configuration
+# 据环境变量初始化所选配置数据，解决缺少配置导致初始化错误的问题
+if globals.DOC_ENGINE == 'elasticsearch':
     ES = get_base_config("es", {})
-elif DOC_ENGINE == 'opensearch':
+elif globals.DOC_ENGINE == 'opensearch':
     OS = get_base_config("os", {})
-elif DOC_ENGINE == 'infinity':
+elif globals.DOC_ENGINE == 'infinity':
     INFINITY = get_base_config("infinity", {"uri": "infinity:23817"})
 
 if STORAGE_IMPL_TYPE in ['AZURE_SPN', 'AZURE_SAS']:
@@ -53,18 +56,22 @@ elif STORAGE_IMPL_TYPE == 'OSS':
 try:
     REDIS = decrypt_database_config(name="redis")
 except Exception:
-    REDIS = {}
-    pass
+    try:
+        REDIS = get_base_config("redis", {})
+    except Exception:
+        REDIS = {}
 # 上传文件最大长度
 DOC_MAXIMUM_SIZE = int(os.environ.get("MAX_CONTENT_LENGTH", 128 * 1024 * 1024))
-
-SVR_QUEUE_NAME = "rag_flow_svr_queue" # 消息队列名称
-SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"  # 消费组
-PAGERANK_FLD = "pagerank_fea" # PAGERANK字段
-TAG_FLD = "tag_feas" # 标签字段
+DOC_BULK_SIZE = int(os.environ.get("DOC_BULK_SIZE", 4))
+EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", 16))
+SVR_QUEUE_NAME = "rag_flow_svr_queue"
+SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"
+PAGERANK_FLD = "pagerank_fea"
+TAG_FLD = "tag_feas"
 
 PARALLEL_DEVICES = 0 # 并行设备数
 try:
+    pip_install_torch()
     import torch.cuda
     PARALLEL_DEVICES = torch.cuda.device_count()
     logging.info(f"found {PARALLEL_DEVICES} gpus")

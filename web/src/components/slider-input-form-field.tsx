@@ -1,5 +1,6 @@
+import { FormLayout } from '@/constants/form';
 import { cn } from '@/lib/utils';
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { SingleFormSlider } from './ui/dual-range-slider';
 import {
@@ -9,7 +10,11 @@ import {
   FormLabel,
   FormMessage,
 } from './ui/form';
-import { Input } from './ui/input';
+import { NumberInput } from './ui/input';
+
+export type FormLayoutType = {
+  layout?: FormLayout;
+};
 
 type SliderInputFormFieldProps = {
   max?: number;
@@ -20,7 +25,7 @@ type SliderInputFormFieldProps = {
   tooltip?: ReactNode;
   defaultValue?: number;
   className?: string;
-};
+} & FormLayoutType;
 
 export function SliderInputFormField({
   max,
@@ -31,20 +36,33 @@ export function SliderInputFormField({
   tooltip,
   defaultValue,
   className,
+  layout = FormLayout.Horizontal,
 }: SliderInputFormFieldProps) {
   const form = useFormContext();
+
+  const isHorizontal = useMemo(() => layout !== FormLayout.Vertical, [layout]);
 
   return (
     <FormField
       control={form.control}
       name={name}
-      defaultValue={defaultValue}
+      defaultValue={defaultValue || 0}
       render={({ field }) => (
-        <FormItem>
-          <FormLabel tooltip={tooltip}>{label}</FormLabel>
+        <FormItem
+          className={cn({ 'flex items-center gap-1 space-y-0': isHorizontal })}
+        >
+          <FormLabel
+            tooltip={tooltip}
+            className={cn({
+              'text-sm whitespace-break-spaces w-1/4': isHorizontal,
+            })}
+          >
+            {label}
+          </FormLabel>
           <div
             className={cn(
               'flex items-center gap-14 justify-between',
+              { 'w-3/4': isHorizontal },
               className,
             )}
           >
@@ -60,15 +78,17 @@ export function SliderInputFormField({
               ></SingleFormSlider>
             </FormControl>
             <FormControl>
-              <Input
-                type={'number'}
-                className="h-7 w-20"
+              <NumberInput
+                className={cn(
+                  'h-6 w-10 p-0 text-center bg-bg-input border border-border-default text-text-secondary',
+                  '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
+                )}
                 max={max}
                 min={min}
                 step={step}
                 {...field}
                 // defaultValue={defaultValue}
-              ></Input>
+              ></NumberInput>
             </FormControl>
           </div>
           <FormMessage />

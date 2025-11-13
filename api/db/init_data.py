@@ -14,28 +14,26 @@
 #  limitations under the License.
 #
 import logging
-import base64
 import json
 import os
 import time
 import uuid
 from copy import deepcopy
 
-from api.db import LLMType, UserTenantRole
+from api.db import UserTenantRole
 from api.db.db_models import init_database_tables as init_web_db, LLMFactories, LLM, TenantLLM
 from api.db.services import UserService
 from api.db.services.canvas_service import CanvasTemplateService
 from api.db.services.document_service import DocumentService
 from api.db.services.knowledgebase_service import KnowledgebaseService
-from api.db.services.llm_service import LLMFactoriesService, LLMService, TenantLLMService, LLMBundle
+from api.db.services.tenant_llm_service import LLMFactoriesService, TenantLLMService
+from api.db.services.llm_service import LLMService, LLMBundle, get_init_tenant_llm
 from api.db.services.user_service import TenantService, UserTenantService
 from api import settings
-from api.utils.file_utils import get_project_base_directory
-
-
-def encode_to_base64(input_string):
-    base64_encoded = base64.b64encode(input_string.encode('utf-8'))
-    return base64_encoded.decode('utf-8')
+from common.constants import LLMType
+from common.file_utils import get_project_base_directory
+from common import globals
+from api.common.base64 import encode_to_base64
 
 
 def init_superuser():
@@ -52,7 +50,7 @@ def init_superuser():
         "id": user_info["id"],
         "name": user_info["nickname"] + "‘s Kingdom",
         "llm_id": settings.CHAT_MDL,
-        "embd_id": settings.EMBEDDING_MDL,
+        "embd_id": globals.EMBEDDING_MDL,
         "asr_id": settings.ASR_MDL,
         "parser_ids": settings.PARSERS,
         "img2txt_id": settings.IMAGE2TEXT_MDL
@@ -63,12 +61,8 @@ def init_superuser():
         "invited_by": user_info["id"],
         "role": UserTenantRole.OWNER
     }
-    tenant_llm = []
-    for llm in LLMService.query(fid=settings.LLM_FACTORY):
-        tenant_llm.append(
-            {"tenant_id": user_info["id"], "llm_factory": settings.LLM_FACTORY, "llm_name": llm.llm_name,
-             "model_type": llm.model_type,
-             "api_key": settings.API_KEY, "api_base": settings.LLM_BASE_URL})
+
+    tenant_llm = get_init_tenant_llm(user_info["id"])
 
     if not UserService.save(**user_info):
         logging.error("can't init admin.")
@@ -84,14 +78,14 @@ def init_superuser():
         {"role": "user", "content": "Hello!"}], gen_conf={})
     if msg.find("ERROR: ") == 0:
         logging.error(
-            "'{}' dosen't work. {}".format(
+            "'{}' doesn't work. {}".format(
                 tenant["llm_id"],
                 msg))
     embd_mdl = LLMBundle(tenant["id"], LLMType.EMBEDDING, tenant["embd_id"])
     v, c = embd_mdl.encode(["Hello!"])
     if c == 0:
         logging.error(
-            "'{}' dosen't work!".format(
+            "'{}' doesn't work!".format(
                 tenant["embd_id"]))
 
 
@@ -103,7 +97,7 @@ def init_llm_factory():
     except Exception:
         pass
 
-    factory_llm_infos = settings.FACTORY_LLM_INFOS    
+    factory_llm_infos = settings.FACTORY_LLM_INFOS
     for factory_llm_info in factory_llm_infos:
         info = deepcopy(factory_llm_info)
         llm_infos = info.pop("llm")
@@ -147,13 +141,19 @@ def init_llm_factory():
             except Exception:
                 pass
             break
+    doc_count = DocumentService.get_all_kb_doc_count()
     for kb_id in KnowledgebaseService.get_all_ids():
-        KnowledgebaseService.update_document_number_in_init(kb_id=kb_id, doc_num=DocumentService.get_kb_doc_count(kb_id))
+        KnowledgebaseService.update_document_number_in_init(kb_id=kb_id, doc_num=doc_count.get(kb_id, 0))
 
 
 
 def add_graph_templates():
     dir = os.path.join(get_project_base_directory(), "agent", "templates")
+    CanvasTemplateService.filter_delete([1 == 1])
+    if not os.path.exists(dir):
+        logging.warning("Missing agent templates!")
+        return
+
     for fnm in os.listdir(dir):
         try:
             cnvs = json.load(open(os.path.join(dir, fnm), "r",encoding="utf-8"))
@@ -162,7 +162,7 @@ def add_graph_templates():
             except Exception:
                 CanvasTemplateService.update_by_id(cnvs["id"], cnvs)
         except Exception:
-            logging.exception("Add graph templates error: ")
+            logging.exception("Add agent templates error: ")
 
 
 def init_web_data():

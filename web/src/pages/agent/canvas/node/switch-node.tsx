@@ -1,16 +1,16 @@
-import { IconFont } from '@/components/icon-font';
-import { useTheme } from '@/components/theme-provider';
 import { Card, CardContent } from '@/components/ui/card';
 import { ISwitchCondition, ISwitchNode } from '@/interfaces/database/flow';
-import { Handle, NodeProps, Position } from '@xyflow/react';
-import classNames from 'classnames';
+import { NodeProps, Position } from '@xyflow/react';
 import { memo, useCallback } from 'react';
 import { SwitchOperatorOptions } from '../../constant';
-import { useGetComponentLabelByValue } from '../../hooks/use-get-begin-query';
+import { LogicalOperatorIcon } from '../../form/switch-form';
+import { useGetVariableLabelByValue } from '../../hooks/use-get-begin-query';
+import { CommonHandle, LeftEndHandle } from './handle';
 import { RightHandleStyle } from './handle-icon';
-import { useBuildSwitchHandlePositions } from './hooks';
-import styles from './index.less';
-import NodeHeader, { ToolBar } from './node-header';
+import NodeHeader from './node-header';
+import { NodeWrapper } from './node-wrapper';
+import { ToolBar } from './toolbar';
+import { useBuildSwitchHandlePositions } from './use-build-switch-handle-positions';
 
 const getConditionKey = (idx: number, length: number) => {
   if (idx === 0 && length !== 1) {
@@ -25,25 +25,30 @@ const getConditionKey = (idx: number, length: number) => {
 const ConditionBlock = ({
   condition,
   nodeId,
-}: {
-  condition: ISwitchCondition;
-  nodeId: string;
-}) => {
+}: { condition: ISwitchCondition } & { nodeId: string }) => {
   const items = condition?.items ?? [];
-  const getLabel = useGetComponentLabelByValue(nodeId);
+  const getLabel = useGetVariableLabelByValue(nodeId);
 
   const renderOperatorIcon = useCallback((operator?: string) => {
-    const name = SwitchOperatorOptions.find((x) => x.value === operator)?.icon;
-    return <IconFont name={name!}></IconFont>;
+    const item = SwitchOperatorOptions.find((x) => x.value === operator);
+    if (item) {
+      return (
+        <LogicalOperatorIcon
+          icon={item?.icon}
+          value={item?.value}
+        ></LogicalOperatorIcon>
+      );
+    }
+    return <></>;
   }, []);
 
   return (
-    <Card>
+    <Card className="bg-bg-card border-transparent rounded-md">
       <CardContent className="p-0 divide-y divide-background-card">
         {items.map((x, idx) => (
           <div key={idx}>
             <section className="flex justify-between gap-2 items-center text-xs p-1">
-              <div className="flex-1 truncate text-background-checked">
+              <div className="flex-1 truncate text-accent-primary">
                 {getLabel(x?.cpn_id)}
               </div>
               <span>{renderOperatorIcon(x?.operator)}</span>
@@ -58,65 +63,48 @@ const ConditionBlock = ({
 
 function InnerSwitchNode({ id, data, selected }: NodeProps<ISwitchNode>) {
   const { positions } = useBuildSwitchHandlePositions({ data, id });
-  const { theme } = useTheme();
   return (
-    <ToolBar selected={selected}>
-      <section
-        className={classNames(
-          styles.logicNode,
-          theme === 'dark' ? styles.dark : '',
-          {
-            [styles.selectedNode]: selected,
-          },
-          'group/operator hover:bg-slate-100',
-        )}
-      >
-        <Handle
-          type="target"
-          position={Position.Left}
-          isConnectable
-          className={styles.handle}
-          id={'a'}
-        ></Handle>
-        <NodeHeader
-          id={id}
-          name={data.name}
-          label={data.label}
-          className={styles.nodeHeader}
-        ></NodeHeader>
+    <ToolBar selected={selected} id={id} label={data.label} showRun={false}>
+      <NodeWrapper selected={selected}>
+        <LeftEndHandle></LeftEndHandle>
+        <NodeHeader id={id} name={data.name} label={data.label}></NodeHeader>
         <section className="gap-2.5 flex flex-col">
           {positions.map((position, idx) => {
             return (
               <div key={idx}>
-                <section className="flex flex-col">
-                  <div className="flex justify-between">
-                    <span className="text-text-sub-title text-xs translate-y-2">
-                      {idx < positions.length - 1 &&
-                        position.condition?.logical_operator?.toUpperCase()}
-                    </span>
+                <section className="flex flex-col text-xs">
+                  <div className="text-right">
                     <span>{getConditionKey(idx, positions.length)}</span>
+                    <div className="text-text-secondary">
+                      {idx < positions.length - 1 && position.text}
+                    </div>
                   </div>
+                  <span className="text-accent-primary">
+                    {idx < positions.length - 1 &&
+                      position.condition?.logical_operator?.toUpperCase()}
+                  </span>
                   {position.condition && (
                     <ConditionBlock
-                      nodeId={id}
                       condition={position.condition}
+                      nodeId={id}
                     ></ConditionBlock>
                   )}
                 </section>
-                <Handle
+                <CommonHandle
                   key={position.text}
                   id={position.text}
                   type="source"
                   position={Position.Right}
                   isConnectable
-                  className={styles.handle}
                   style={{ ...RightHandleStyle, top: position.top }}
-                ></Handle>
+                  nodeId={id}
+                  isConnectableEnd={false}
+                ></CommonHandle>
               </div>
             );
           })}
         </section>
-      </section>
+      </NodeWrapper>
     </ToolBar>
   );
 }

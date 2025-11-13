@@ -20,7 +20,7 @@ import uuid
 
 import valkey as redis
 from rag import settings
-from rag.utils import singleton
+from common.decorator import singleton
 from valkey.lock import Lock
 import trio
 
@@ -74,17 +74,21 @@ class RedisDB:
 
     def __open__(self):
         try:
-            ''' 创建 redis 连接对象，并注册脚本 '''
-            self.REDIS = redis.StrictRedis(
-                host=self.config["host"].split(":")[0],
-                port=int(self.config.get("host", ":6379").split(":")[1]),
-                db=int(self.config.get("db", 1)),
-                password=self.config.get("password"),
-                decode_responses=True,
-            )
-            self.register_scripts() # 注册所有必要的Lua脚本
-        except Exception:
-            logging.warning("Redis can't be connected.")
+            conn_params = {
+                "host": self.config["host"].split(":")[0],
+                "port": int(self.config.get("host", ":6379").split(":")[1]),
+                "db": int(self.config.get("db", 1)),
+                "decode_responses": True,
+            }
+            password = self.config.get("password")
+            if password:
+                conn_params["password"] = password
+
+            self.REDIS = redis.StrictRedis(**conn_params)
+
+            self.register_scripts()
+        except Exception as e:
+            logging.warning(f"Redis can't be connected. Error: {str(e)}")
         return self.REDIS
 
     def health(self):
@@ -94,6 +98,20 @@ class RedisDB:
 
         if self.REDIS.get(a) == b:
             return True
+
+    def info(self):
+        info = self.REDIS.info()
+        return {
+            'redis_version': info["redis_version"],
+            'server_mode': info["server_mode"],
+            'used_memory': info["used_memory_human"],
+            'total_system_memory': info["total_system_memory_human"],
+            'mem_fragmentation_ratio': info["mem_fragmentation_ratio"],
+            'connected_clients': info["connected_clients"],
+            'blocked_clients': info["blocked_clients"],
+            'instantaneous_ops_per_sec': info["instantaneous_ops_per_sec"],
+            'total_commands_processed': info["total_commands_processed"]
+        }
 
     def is_alive(self):
         ''' 检查Redis连接对象是否已成功创建 '''
@@ -238,43 +256,55 @@ class RedisDB:
                 logging.exception(
                     "RedisDB.queue_product " + str(queue) + " got exception: " + str(e)
                 )
+                self.__open__()
         return False
 
     def queue_consumer(self, queue_name, group_name, consumer_name, msg_id=b">") -> RedisMsg:
-        """
-        从 Redis Stream 中消费消息，如果消费者组不存在则创建。
-        参考: https://redis.io/docs/latest/commands/xreadgroup/
-        """
-        try:
-            group_info = self.REDIS.xinfo_groups(queue_name)
-            if not any(gi["name"] == group_name for gi in group_info):
-                self.REDIS.xgroup_create(queue_name, group_name, id="0", mkstream=True)
-            args = {
-                "groupname": group_name,
-                "consumername": consumer_name,
-                "count": 1,
-                "block": 5,
-                "streams": {queue_name: msg_id},
-            }
-            messages = self.REDIS.xreadgroup(**args)
-            if not messages:
-                return None
-            stream, element_list = messages[0]
-            if not element_list:
-                return None
-            msg_id, payload = element_list[0]
-            res = RedisMsg(self.REDIS, queue_name, group_name, msg_id, payload)
-            return res
-        except Exception as e:
-            if str(e) == 'no such key':
-                pass
-            else:
-                logging.exception(
-                    "RedisDB.queue_consumer "
-                    + str(queue_name)
-                    + " got exception: "
-                    + str(e)
-                )
+        # 从 Redis Stream 中消费消息，如果消费者组不存在则创建。
+        """https://redis.io/docs/latest/commands/xreadgroup/"""
+        for _ in range(3):
+            try:
+
+                try:
+                    group_info = self.REDIS.xinfo_groups(queue_name)
+                    if not any(gi["name"] == group_name for gi in group_info):
+                        self.REDIS.xgroup_create(queue_name, group_name, id="0", mkstream=True)
+                except redis.exceptions.ResponseError as e:
+                    if "no such key" in str(e).lower():
+                        self.REDIS.xgroup_create(queue_name, group_name, id="0", mkstream=True)
+                    elif "busygroup" in str(e).lower():
+                        logging.warning("Group already exists, continue.")
+                        pass
+                    else:
+                        raise
+
+                args = {
+                    "groupname": group_name,
+                    "consumername": consumer_name,
+                    "count": 1,
+                    "block": 5,
+                    "streams": {queue_name: msg_id},
+                }
+                messages = self.REDIS.xreadgroup(**args)
+                if not messages:
+                    return None
+                stream, element_list = messages[0]
+                if not element_list:
+                    return None
+                msg_id, payload = element_list[0]
+                res = RedisMsg(self.REDIS, queue_name, group_name, msg_id, payload)
+                return res
+            except Exception as e:
+                if str(e) == 'no such key':
+                    pass
+                else:
+                    logging.exception(
+                        "RedisDB.queue_consumer "
+                        + str(queue_name)
+                        + " got exception: "
+                        + str(e)
+                    )
+                    self.__open__()
         return None
 
     def get_unacked_iterator(self, queue_names: list[str], group_name, consumer_name):
@@ -319,40 +349,37 @@ class RedisDB:
         return []
 
     def requeue_msg(self, queue: str, group_name: str, msg_id: str):
-        '''
-        重新排队一个消息：从队列中读取指定ID的消息内容，重新添加到队列中，并确认原消息。
-        '''
-        try:
-            messages = self.REDIS.xrange(queue, msg_id, msg_id)
-            if messages:
-                self.REDIS.xadd(queue, messages[0][1])
-                self.REDIS.xack(queue, group_name, msg_id)
-        except Exception as e:
-            logging.warning(
-                "RedisDB.get_pending_msg " + str(queue) + " got exception: " + str(e)
-            )
+        for _ in range(3):
+            try:
+                messages = self.REDIS.xrange(queue, msg_id, msg_id)
+                if messages:
+                    self.REDIS.xadd(queue, messages[0][1])
+                    self.REDIS.xack(queue, group_name, msg_id)
+            except Exception as e:
+                logging.warning(
+                    "RedisDB.get_pending_msg " + str(queue) + " got exception: " + str(e)
+                )
+                self.__open__()
 
     def queue_info(self, queue, group_name) -> dict | None:
-        ''' 获取指定队列和消费者组的信息 '''
-        try:
-            groups = self.REDIS.xinfo_groups(queue)
-            for group in groups:
-                if group["name"] == group_name:
-                    return group
-        except Exception as e:
-            logging.warning(
-                "RedisDB.queue_info " + str(queue) + " got exception: " + str(e)
-            )
+        for _ in range(3):
+            try:
+                groups = self.REDIS.xinfo_groups(queue)
+                for group in groups:
+                    if group["name"] == group_name:
+                        return group
+            except Exception as e:
+                logging.warning(
+                    "RedisDB.queue_info " + str(queue) + " got exception: " + str(e)
+                )
+                self.__open__()
         return None
 
     def delete_if_equal(self, key: str, expected_value: str) -> bool:
-        '''
-        原子性操作：如果Redis中指定键的值等于给定值，则删除该键，否则不做任何操作。
-        此操作通过Lua脚本实现，保证原子性。
-
-        Do follwing atomically:
+        """
+        Do following atomically:
         Delete a key if its value is equals to the given one, do nothing otherwise.
-        '''
+        """
         return bool(self.lua_delete_if_equal(keys=[key], args=[expected_value], client=self.REDIS))
 
     def delete(self, key) -> bool:
@@ -364,8 +391,8 @@ class RedisDB:
             logging.warning("RedisDB.delete " + str(key) + " got exception: " + str(e))
             self.__open__()
         return False
-    
-    
+
+
 REDIS_CONN = RedisDB()
 
 

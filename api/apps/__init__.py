@@ -24,13 +24,15 @@ from flask_cors import CORS  # 跨域插件
 from flasgger import Swagger # swagger 插件
 from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 
-from api.db import StatusEnum
+from common.constants import StatusEnum
 from api.db.db_models import close_connection
 from api.db.services import UserService
-from api.utils import CustomJSONEncoder, commands
+from api.utils.json_encode import CustomJSONEncoder
+from api.utils import commands
 
-from flask_session import Session # 会话插件
-from flask_login import LoginManager  # 登入插件
+from flask_mail import Mail
+from flask_session import Session
+from flask_login import LoginManager
 from api import settings
 from api.utils.api_utils import server_error_response
 from api.constants import API_VERSION
@@ -40,6 +42,7 @@ __all__ = ["app"]
 Request.json = property(lambda self: self.get_json(force=True, silent=True)) # 过滤请求
 
 app = Flask(__name__)
+smtp_mail_server = Mail()
 
 # Add this at the beginning of your file to configure Swagger UI
 # 在文件开头添加此内容以配置 Swagger UI
@@ -177,16 +180,16 @@ def load_user(web_request):
         try:
             # 解密
             access_token = str(jwt.loads(authorization))
-            
+
             if not access_token or not access_token.strip():
                 logging.warning("Authentication attempt with empty access token")
                 return None
-            
+
             # Access tokens should be UUIDs (32 hex characters)
             if len(access_token.strip()) < 32:
                 logging.warning(f"Authentication attempt with invalid token format: {len(access_token)} chars")
                 return None
-            
+
             user = UserService.query(
                 access_token=access_token, status=StatusEnum.VALID.value
             )

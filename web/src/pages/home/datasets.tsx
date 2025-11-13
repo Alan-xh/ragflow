@@ -1,5 +1,6 @@
-import { IconFont } from '@/components/icon-font';
+import { CardSineLineContainer } from '@/components/card-singleline-container';
 import { RenameDialog } from '@/components/rename-dialog';
+import { HomeIcon } from '@/components/svg-icon';
 import { CardSkeleton } from '@/components/ui/skeleton';
 import { useFetchNextKnowledgeListByPage } from '@/hooks/use-knowledge-request';
 import { useTranslation } from 'react-i18next';
@@ -20,9 +21,10 @@ export function Datasets() {
 
   return (
     <section>
-      <h2 className="text-2xl font-bold mb-6 flex gap-2.5 items-center">
-        <IconFont name="data" className="size-8"></IconFont>
-        {t('header.knowledgeBase')}
+      <h2 className="text-2xl font-semibold mb-6 flex gap-2.5 items-center">
+        {/* <IconFont name="data" className="size-8"></IconFont> */}
+        <HomeIcon name="datasets" width={'32'} />
+        {t('header.dataset')}
       </h2>
       <div className="flex gap-6">
         {loading ? (
@@ -30,17 +32,23 @@ export function Datasets() {
             <CardSkeleton />
           </div>
         ) : (
-          <div className="flex gap-4 flex-1">
-            {kbs.slice(0, 6).map((dataset) => (
-              <DatasetCard
-                key={dataset.id}
-                dataset={dataset}
-                showDatasetRenameModal={showDatasetRenameModal}
-              ></DatasetCard>
-            ))}
-          </div>
+          // <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 max-h-[78vh] overflow-auto">
+          <CardSineLineContainer>
+            {kbs
+              ?.slice(0, 6)
+              .map((dataset) => (
+                <DatasetCard
+                  key={dataset.id}
+                  dataset={dataset}
+                  showDatasetRenameModal={showDatasetRenameModal}
+                ></DatasetCard>
+              ))}
+            <div className="min-h-24">
+              <SeeAllCard></SeeAllCard>
+            </div>
+          </CardSineLineContainer>
+          // </div>
         )}
-        <SeeAllCard></SeeAllCard>
       </div>
       {datasetRenameVisible && (
         <RenameDialog
